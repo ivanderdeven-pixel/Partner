@@ -1,0 +1,103 @@
+import time
+class State:
+    def __init__(self):
+        self.happiness = 50
+        self.energy = 100
+        self.curiosity = 50
+        self.social = 50
+        self.activity = "idle"
+        self.last_activity_change = time.time()
+
+    def change_happiness(self, amount):
+        self.happiness = max(0, min(100, self.happiness + amount))
+
+    def change_energy(self, amount):
+        self.energy = max(0, min(100, self.energy + amount))
+
+    def change_curiosity(self, amount):
+        self.curiosity = max(0, min(100, self.curiosity + amount))
+
+    def change_social(self, amount):
+        self.social = max(0, min(100, self.social + amount))
+
+    def set_activity(self, activity):
+        self.activity = activity
+        self.last_activity_change = time.time()
+
+    def update_activity(self):
+        elapsed = time.time() - self.last_activity_change
+
+        if self.activity == "talking" and elapsed >= 5:
+            self.activity = "idle"
+
+    def get_activity_timer(self):
+        if self.activity != "talking":
+            return 0
+
+        elapsed = time.time() - self.last_activity_change
+        remaining = 5 - elapsed
+
+        return max(0, remaining)
+
+    def apply_event(self, event):
+        if event == "user_message":
+            self.change_social(5)
+            self.change_happiness(2)
+            self.set_activity("talking")
+
+        elif event == "compliment":
+            self.change_happiness(10)
+            self.change_social(5)
+            self.set_activity("talking")
+
+        elif event == "long_idle":
+            self.change_social(-3)
+            self.change_energy(-2)
+            self.set_activity("idle")
+
+        elif event == "interesting_topic":
+            self.change_curiosity(10)
+            self.set_activity("thinking")
+
+    def get_mood(self):
+        if self.energy < 20:
+            return "tired"
+
+        if self.happiness >= 75 and self.social >= 60:
+            return "happy"
+
+        if self.curiosity >= 75:
+            return "curious"
+
+        if self.social < 25:
+            return "lonely"
+
+        if self.happiness < 30:
+            return "sad"
+
+        return "calm"
+
+    def show_state(self):
+        print("=== Mood State ===")
+        print(f"Happiness : {self.happiness}")
+        print(f"Energy    : {self.energy}")
+        print(f"Curiosity : {self.curiosity}")
+        print(f"Social    : {self.social}")
+        print(f"Activity  : {self.activity}")
+        print(f"Mood      : {self.get_mood()}")
+        print(f"Activity Timer : {self.get_activity_timer():.1f}s")
+
+        def update_activity(self):
+            if self.activity == "talking":
+                self.activity = "idle"
+        elapsed = time.time() - self.last_activity_change
+
+        def show_state(self):
+            print("=== Mood State ===")
+            print(f"Happiness : {self.happiness}")
+            print(f"Energy    : {self.energy}")
+            print(f"Curiosity : {self.curiosity}")
+            print(f"Social    : {self.social}")
+            print(f"Activity  : {self.activity}")
+            print(f"Mood      : {self.get_mood()}")
+            print(f"Activity Timer : {self.get_activity_timer():.1f}s")
