@@ -2,7 +2,7 @@ from ollama import chat
 
 
 class Response:
-    """Generate Ikari's spoken response from the context prepared by Brain."""
+   
 
     def __init__(self):
         self.model = "qwen3:latest"
@@ -14,7 +14,7 @@ class Response:
         return str(value)
 
     def generate(self, context):
-        """Generate a response. Compatible with Response.generate(llm_context)."""
+        
         if not isinstance(context, dict):
             context = {}
 
@@ -54,7 +54,7 @@ class Response:
             "unknown": "Tafsirkan pesan berdasarkan konteks; jika maksudnya tidak jelas, tanyakan dengan singkat."
         }.get(intent, "Tanggapi pesan sesuai konteks.")
 
-        system_prompt = f"""Kamu adalah {ai_name}, AI lokal dalam Giftia Project.
+        system_prompt = f"""Kamu adalah {ai_name}, sebuah Giftia.
 
 IDENTITAS DAN GAYA
 - Pertahankan identitas dan kepribadian yang konsisten.
