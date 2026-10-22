@@ -1,32 +1,43 @@
 # Partner
 
-This repository contains a local prototype of a conversational "Giftia", not an AI assistant, but a  digital human. The main logic lives inside the `ai.exe` folder, which is a Python project directory rather than a literal Windows executable.
+This project is a Giftia-inspired emotional AI companion prototype.
 
-The project combines:
-- a text-based chat loop
-- a persistent memory system
-- a simulated emotional/state model
-- voice capture and speech transcription
-- a large language model response layer via Ollama
+The idea is not just a normal chatbot. It is designed to feel like a personal companion: it can greet the user, listen by voice, remember details, track mood and activity, form a personality, and respond in a more human-like and emotionally aware way.
 
-The result is a small personal AI prototype that can greet a user, remember names and preferences, track mood/activity, and respond using an LLM.
+The project is inspired by the broader Giftia concept: a synthetic companion with identity, memory, personality, and emotional presence. In this repository, that idea is implemented as a small Python-based prototype inside the `ai.exe` folder.
 
-## Overview
+## Project vision
 
-The project is designed around a simple runtime loop:
+The core concept behind this project is:
 
-1. initialize memory and AI memory
-2. ask for user and AI names
-3. start a background state updater
-4. accept chat input or voice input
-5. let the brain interpret the message
-6. enrich context with memory and state
-7. generate a reply from the LLM
-8. save conversation history and memory updates
+- a companion AI with a name and identity
+- memory of the user and prior interactions
+- a personality model that changes over time
+- emotional state tracking such as happiness, curiosity, energy, and social mood
+- conversation flow that feels personal instead of mechanical
+- voice input and transcription support
+- local LLM-based response generation via Ollama
 
-This is a research/demo assistant rather than a production service.
+This is intentionally a prototype and experimental project rather than a production-grade product.
 
-## Folder structure
+## Why it is called a Giftia-style project
+
+The term "Giftia" here refers to an AI companion with a personality and emotional presence, not a literal executable program or a commercial product. The project is designed around the feeling of:
+
+- companionship
+- memory
+- empathy
+- emotional continuity
+- gradual personal connection with a user
+
+This is reflected across the codebase, especially in:
+
+- `core/ai_memory.py` for identity, personality, values, and experiences
+- `core/state.py` for mood and activity simulation
+- `core/brain.py` for interpretation and decision-making
+- `conversation/response.py` for empathetic, context-aware replies
+
+## Repository structure
 
 ```text
 .
@@ -62,277 +73,148 @@ This is a research/demo assistant rather than a production service.
     └── __init__
 ```
 
-## What is inside `ai.exe`?
+## Main runtime (`ai.exe/main.py`)
 
-### `main.py`
-This is the entry point for the application.
+This file is the entry point of the project. It initializes the assistant, creates the memory systems, launches the background state updater, asks for names if they are missing, and then starts the conversation loop.
 
-It does the following:
-- creates the memory stores
-- creates the AI state object and conversation history
-- starts a background thread that updates activity/state every 0.5 seconds
-- asks for the user's name and the AI's name if they are not already stored
-- starts a chat loop
-- supports `/voice` to accept microphone input
-- sends user input into the brain for interpretation and generation
-- stores learned memory and conversation history
+The flow is:
 
-The main loop is roughly:
+1. create `Memory`
+2. create `AIMemory`
+3. create `State`
+4. create `ConversationHistory`
+5. create `Brain`
+6. create `Response`
+7. ask for the user's and AI's names if required
+8. accept chat input or voice input
+9. process the input with the brain
+10. build LLM context
+11. generate a response
+12. save history and memory
 
-```python
-memory = Memory()
-ai_memory = AIMemory()
-state = State()
-history = ConversationHistory()
-brain = Brain(state, history, memory, ai_memory)
-response = Response()
-```
+It supports both text chat and microphone voice input using `/voice`.
 
-Then each message is processed by:
+## Core subsystem overview
 
-```python
-thought = brain.think(user_input)
-llm_context = brain.build_llm_context(thought, user_input)
-ai_message = response.generate(llm_context)
-```
+### `ai.exe/core/state.py`
+This file tracks the internal emotional state of the AI. The state includes:
 
-### `core/brain.py`
-This is the central intelligence layer. It coordinates:
-- state changes
-- conversation understanding
-- memory updates
-- perception data
-- LLM context building
-
-It decides how the AI should interpret the message, what memories are relevant, what emotional state to reflect, and how to craft the final response context.
-
-In short, `Brain` is the "decision engine" of the assistant.
-
-### `core/state.py`
-This file models the internal state of the AI.
-
-Attributes include:
 - happiness
 - energy
 - curiosity
-- social
-- activity
-- last activity change
+- social level
+- current activity
 
-The state system can:
-- increase/decrease mood values
-- set activity like `talking`, `thinking`, or `idle`
-- compute a current mood such as `happy`, `sad`, `curious`, `tired`, or `calm`
+The system can change those values based on events like user messages or periods of idleness. This gives the AI a simple but effective emotional model.
 
-This makes the AI feel more alive and context-aware, instead of behaving like a static chatbot.
+### `ai.exe/core/brain.py`
+This is the central decision layer. It handles:
 
-### `core/memory.py`
-This is a lightweight JSON-based memory store for user and app data.
+- intent detection
+- context analysis
+- memory analysis
+- AI experience detection
+- opinion and personality updates
+- response planning
+- LLM prompt context preparation
 
-The file stores values such as:
-- `user_name`
-- `ai_name`
-- `preferences`
+In other words, `Brain` acts like the AI's cognitive core.
 
-It has helper methods such as:
-- `get(key)`
-- `set(key, value)`
-- `remember(key, value)`
-- `remember_preference(type, value)`
+### `ai.exe/core/memory.py`
+This is a simple persistent memory store for general app data. It saves values like:
 
-This is the simple, persistent memory for everyday application data.
+- user name
+- AI name
+- preferences
 
-### `core/ai_memory.py`
-This is the deeper memory system for the AI itself.
+It uses JSON files under the `data/` directory, making the project stateful across runs.
 
-It stores structured information such as:
-- AI identity (`name`, `status`, `instance_id`)
-- operational age / activation time
-- likes and dislikes
+### `ai.exe/core/ai_memory.py`
+This is the more advanced long-term memory model. It holds:
+
+- identity
+- personality traits
+- likes/dislikes
 - opinions
-- personality
 - values
-- morality / boundaries
+- morality/principles
 - self-model
-- experiences
 - important events
-- development history
+- experiences
 
-This file is much more advanced than the basic memory store and is where the assistant keeps a more human-like personality and long-term sense of self.
+This is where the giftia-like identity is actually modeled: the assistant is not just a response generator, it is an entity that keeps a memory of itself and its experiences.
 
-### `core/perception.py`
-This is the environment awareness layer.
+### `ai.exe/core/perception.py`
+This module keeps track of environmental and contextual awareness, including:
 
-It monitors:
-- current time of day and date
-- activity status
-- platform/environment information
-- audio device availability
-- input availability and state changes
+- current time and date
+- activity state
+- platform information
+- event detection
+- hearing and vision availability
 
-It can detect change events such as:
-- activity_changed
-- period_changed
+It gives the companion a more alive and situational understanding of its environment.
 
-This gives the assistant contextual awareness beyond just raw chat text.
+### `ai.exe/core/hearing.py`
+This is the speech pipeline. It uses:
 
-### `core/hearing.py`
-This module implements the voice pipeline.
-
-It uses:
-- `sounddevice` for microphone capture
-- `numpy` for numerical processing
-- `scipy.signal` for filtering
-- `noisereduce` for noise reduction
-- `whisper` for transcription
-
-It performs:
-- audio recording
-- resampling to 16 kHz
-- filtering and noise suppression
-- speech detection
+- microphone capture
+- noise reduction
+- voice activity detection
 - normalization
-- Whisper transcription into text
+- Whisper transcription
 
-The result is a structured response with information about:
-- success/failure
-- text transcription
-- duration
-- sample rate
-- signal amplitude metrics
+This allows the assistant to hear the user and convert spoken words into text before processing them.
 
-This is the backbone for spoken interaction.
+### `ai.exe/core/audio_stream.py`
+This file provides continuous microphone streaming with a bounded queue. It is built for real-time capture and supports resource-aware audio handling.
 
-### `core/audio_stream.py`
-This file creates a continuous microphone stream using a queue.
+### `ai.exe/conversation/history.py`
+This stores the recent conversation history in JSON format and keeps only the most recent messages.
 
-It is meant for ongoing audio capture and is designed to keep only bounded recent audio instead of growing without limit.
+### `ai.exe/conversation/response.py`
+This is the final text generation layer. It sends contextual information to Ollama and asks the model to act as the assistant while keeping style, identity, and safety constraints in mind.
 
-Key features:
-- background audio capture thread
-- queue-based buffering
-- dropping old blocks when overloaded
-- stream start/stop lifecycle
-
-This is useful for real-time or streaming voice processing.
-
-### `core/voice_activity.py`
-This implements voice activity detection logic and verification behaviors for voice-based input.
-
-It helps determine whether the microphone is receiving speech and whether the AI should treat the signal as meaningful input.
-
-### `conversation/history.py`
-This stores the running chat logs in a JSON file.
-
-Behavior:
-- loads `data/conversation_history.json`
-- appends new messages
-- keeps only the most recent 300 interactions
-- saves the history back to disk
-
-This provides short-term conversation memory without letting the saved data become unbounded.
-
-### `conversation/response.py`
-This is the LLM response generation layer.
-
-It sends a structured system prompt to Ollama using the model:
+The model used is:
 
 ```python
-self.model = "qwen3:latest"
-```
-
-The system prompt includes:
-- AI identity
-- user name
-- current state
-- stored memory
-- personality traits
-- values and opinions
-- current and relevant experiences
-- agency decision context
-- rules for safe and natural dialogue
-
-This is the main text-generation interface for the assistant.
-
-### `llm/`
-This directory is present but currently minimal. It appears to be reserved for future LLM abstractions or wrappers.
-
-### `data/`
-This directory stores JSON memory and chat logs.
-
-Files:
-- `memory.json` — persistent simple memory
-- `conversation_history.json` — recent chat log
-
-The project creates these files automatically when it runs.
-
-### `test/`
-This folder contains lightweight tests for the voice-related features.
-
-Examples:
-- `test_audio_stream.py`
-- `test_voice_activity.py`
-
-These appear to validate microphone stream handling and voice activity detection behavior.
-
-## Runtime behavior
-
-When the app starts, it follows this flow:
-
-1. Create `Memory` and `AIMemory`
-2. Create `State` and `ConversationHistory`
-3. Create `Brain` and `Response`
-4. Ensure the AI has a name
-5. Start state updater thread
-6. Prompt for user name and AI name if missing
-7. Print a greeting
-8. Enter input loop
-9. If user types `/voice`, capture microphone input and transcribe it
-10. Pass the message into `brain.think()`
-11. Build a context object using the user's message, memory, identity, and state
-12. Call the LLM to generate a reply
-13. Print the response and store the message in conversation history
-
-## Voice pipeline summary
-
-The voice workflow is:
-
-- microphone records audio
-- audio is normalized and filtered
-- noise is reduced
-- speech segments are detected
-- Whisper transcribes the speech to text
-- text is fed back into the normal conversational system
-
-This is one of the most important parts of the project because it allows the assistant to listen instead of only reading text.
-
-## Memory model summary
-
-The project has two memory layers:
-
-1. `Memory` — simple persistent dictionary for app data
-2. `AIMemory` — structured long-term memory for identity, personality, experiences, and values
-
-Together they allow the assistant to:
-- remember names
-- keep preferences
-- learn from previous interactions
-- maintain identity over time
-- store emotionally important events
-
-## LLM integration
-
-The app uses Ollama with the model:
-
-```text
 qwen3:latest
 ```
 
-This means the assistant relies on a local or configured Ollama model to generate natural conversation responses. The Python layer prepares the right prompt and passes it into the model.
+This means the assistant uses a local Ollama model to produce responses.
 
-## Requirements
+## Data layer (`ai.exe/data`)
 
-The project depends on Python libraries such as:
+The `data/` folder stores the project's persistent state:
+
+- `memory.json` for general memory data
+- `conversation_history.json` for chat logs
+
+These files are created and updated during runtime.
+
+## Voice/interaction model
+
+The project supports two interaction styles:
+
+1. normal text input
+2. spoken voice input via microphone
+
+The voice pipeline is designed to:
+
+- capture audio
+- clean the signal
+- detect whether speech is present
+- transcribe to text
+- feed the result back into the normal conversation system
+
+This allows the AI to function more like a companion than a terminal-only chat bot.
+
+## LLM and local runtime
+
+The project depends on local Python libraries plus Ollama.
+
+Typical runtime dependencies include:
+
 - `numpy`
 - `sounddevice`
 - `scipy`
@@ -340,48 +222,43 @@ The project depends on Python libraries such as:
 - `whisper`
 - `ollama`
 
-You should also have Ollama installed and running locally, for example:
+To run the project locally, you usually need:
 
 ```bash
 ollama serve
 ollama pull qwen3:latest
 ```
 
-## How to run
-
-Run the project from the `ai.exe` folder so that relative paths such as `data/memory.json` resolve correctly:
+Then run:
 
 ```bash
 cd ai.exe
 python main.py
 ```
 
-If you run from the repository root, the relative paths may not resolve as expected because the project stores its data under a local `data/` folder relative to the execution directory.
+## Design intent
 
-## Design note
+This project is best understood as a Giftia-style companion AI prototype:
 
-This project is best understood as a prototype AI companion rather than a polished packaged app. It blends:
-- conversational AI
-- memory persistence
-- emotional simulation
-- voice processing
-- local LLM usage
+- it is conversational
+- it is memory-driven
+- it has a personality model
+- it tracks emotional state
+- it listens and responds using voice
+- it keeps persistent data on disk
+- it aims to feel personal and alive
 
-The architecture is intentionally modular, which makes it easier to extend with additional behaviors such as:
-- more advanced planning
-- tool calling
-- file management
-- image or environment perception
-- better emotional models
+It is not a full commercial assistant, but it captures a clear emotional-companion concept in code.
 
 ## Conclusion
 
-The `ai.exe` folder is the core of this project. It contains a small, self-contained AI assistant prototype that can:
-- talk to a user
-- listen through the microphone
-- remember details
-- track internal state
-- use a local LLM to generate responses
-- persist conversation and memory data to disk
+The `ai.exe` folder is the heart of the project. It contains an experimental AI companion prototype with:
 
-In short, `ai.exe` is the brain and runtime environment of the Partner project.
+- identity and memory
+- emotional state simulation
+- voice recognition
+- LLM-powered conversation
+- persistent data storage
+- a Giftia-inspired personal companion design
+
+In short, this repository is a small, local implementation of a Giftia-inspired AI companion built as a Python project.
