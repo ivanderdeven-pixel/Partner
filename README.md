@@ -1,6 +1,6 @@
 # Partner
 
-This repository contains a local prototype of a conversational "Giftia"-style AI assistant. The main logic lives inside the `ai.exe` folder, which is a Python project directory rather than a literal Windows executable.
+This repository contains a local prototype of a conversational "Giftia", not an AI assistant, but a  digital human. The main logic lives inside the `ai.exe` folder, which is a Python project directory rather than a literal Windows executable.
 
 The project combines:
 - a text-based chat loop
