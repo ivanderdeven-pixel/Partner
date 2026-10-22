@@ -1,3 +1,3 @@
 # Partner
 
-platform test
+platform test for giftia project.
