@@ -203,15 +203,15 @@ Model diri: {ai_memory.get("self_model", {})}
 Preferensi pengguna: {trigger.get("preferences", {})}
 Percakapan terbaru: {recent_chat}
 
-Jawab hanya JSON valid:
-{{
- "action": "speak" atau "wait" atau "silent",
- "motivation": "curiosity", "playfulness", "social", "follow_up", "sharing", "goal", "other", atau null,
- "message_intent": ringkasan singkat atau null,
- "reason": alasan singkat,
- "recheck_after_seconds": bilangan bulat 30 sampai 600
-}}
-Jangan tulis pesan untuk pengguna pada tahap ini."""
+Jawab hanya JSON valid. Gunakan nilai yang sesuai, bukan teks placeholder:
+{
+ "action": "speak",
+ "motivation": "curiosity",
+ "message_intent": "menanyakan kelanjutan topik terakhir",
+ "reason": "masih ada pertanyaan yang relevan",
+ "recheck_after_seconds": 90
+}
+Nilai action hanya boleh "speak", "wait", atau "silent". Motivation boleh "curiosity", "playfulness", "social", "follow_up", "sharing", "goal", "other", atau null. message_intent boleh berupa string atau null. recheck_after_seconds harus bilangan bulat 30 sampai 600. Jangan tulis pesan untuk pengguna pada tahap ini."""
         result = chat(
             model=self.model,
             messages=[
