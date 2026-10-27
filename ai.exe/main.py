@@ -1,9 +1,11 @@
+import queue
 import threading
 import time
 
 from core.state import State
 from core.brain import Brain
 from core.life import LifeDevelopment
+from core.autonomous import AutonomousResponse
 from conversation.response import Response
 from conversation.history import ConversationHistory
 from core.memory import Memory
