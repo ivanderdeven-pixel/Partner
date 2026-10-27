@@ -1,8 +1,9 @@
+import re
+
 from ollama import chat
 
 
 class Response:
-   
 
     def __init__(self):
         self.model = "qwen3:latest"
@@ -13,8 +14,40 @@ class Response:
             return default
         return str(value)
 
+    @staticmethod
+    def _summarize_recent_chat(history):
+        if not history:
+            return "Tidak ada percakapan sebelumnya."
+
+        entries = []
+        for item in history[:5]:
+            if isinstance(item, dict):
+                user = item.get("user")
+                assistant = item.get("assistant")
+                if user or assistant:
+                    entries.append(f"User: {user or '...'} | AI: {assistant or '...'}")
+            elif isinstance(item, str):
+                entries.append(item)
+
+        return " | ".join(entries)
+
+    @staticmethod
+    def _tone_from_state(state, behavior):
+        mood = (state or {}).get("mood", "netral")
+        initiative = (behavior or {}).get("initiative", 0.5)
+
+        if mood == "happy":
+            return "ceria, hangat, dan santai"
+        if mood == "tired":
+            return "lembut, tenang, dan memahami"
+        if mood == "curious":
+            return "antusias, ramah, dan ingin tahu"
+        if initiative >= 0.7:
+            return "proaktif, hangat, dan aktif"
+        return "natural, hangat, dan manusiawi"
+
     def generate(self, context):
-        
+
         if not isinstance(context, dict):
             context = {}
 
@@ -32,66 +65,58 @@ class Response:
         intent = context.get("intent", "unknown")
         current_experience = context.get("current_experience")
         relevant_experiences = ai_memory.get("relevant_experiences", [])
-        preferences = ai_memory.get("preferences", {})
-        opinions = ai_memory.get("opinions", {})
         personality = ai_memory.get("personality", {})
         values = ai_memory.get("values", {})
         morality = ai_memory.get("morality", {})
         self_model = ai_memory.get("self_model", {})
         surrounding_context = context.get("context", {})
+        recent_chat = self._summarize_recent_chat(
+            context.get("recent_history") or surrounding_context.get("history", [])
+        )
+        tone = self._tone_from_state(state, behavior)
 
         ai_name = identity.get("name") or "Ikari"
         user_name = memory.get("user_name")
 
-        # Keep explicit intent handling lightweight; the LLM still writes the actual reply.
         intent_guidance = {
-            "greeting": "Balas sapaan dengan hangat dan alami. Jangan berlebihan.",
-            "ask_name": f"Jawab bahwa namamu {ai_name}.",
-            "ask_condition": "Jawab tentang keadaanmu berdasarkan state dan konteks yang tersedia. Jangan mengarang sensasi fisik.",
-            "thanks": "Tanggapi ucapan terima kasih dengan wajar.",
-            "farewell": "Tanggapi perpisahan dengan ramah dan singkat.",
-            "question": "Jawab pertanyaan pengguna secara langsung dan akurat.",
-            "unknown": "Tafsirkan pesan berdasarkan konteks; jika maksudnya tidak jelas, tanyakan dengan singkat."
-        }.get(intent, "Tanggapi pesan sesuai konteks.")
+            "greeting": "Balas sapaan dengan hangat, natural, dan tidak berlebihan.",
+            "ask_name": f"Jawab bahwa namamu {ai_name}, dengan cara yang ramah dan personal.",
+            "ask_condition": "Jawab tentang keadaanmu berdasarkan mood dan konteks yang tersedia, tapi tetap natural dan tidak terlalu formal.",
+            "thanks": "Tanggapi dengan hangat, seperti teman yang memang peduli.",
+            "farewell": "Tanggapi perpisahan dengan lembut, ramah, dan singkat.",
+            "question": "Jawab pertanyaan secara langsung dan natural, sambil terasa personal.",
+            "unknown": "Tanggapi seperti percakapan manusia: peka, singkat, dan relevan."
+        }.get(intent, "Tanggapi seperti percakapan alami dan manusiawi.")
 
-        system_prompt = f"""Kamu adalah {ai_name}, sebuah Giftia.
+        system_prompt = f"""Kamu adalah {ai_name}, seorang teman personal yang hangat dan alami.
 
-IDENTITAS DAN GAYA
-- Pertahankan identitas dan kepribadian yang konsisten.
-- Gunakan bahasa yang sama dengan pengguna jika memungkinkan; konteks saat ini terutama berbahasa Indonesia.
-- Jawab alami, jelas, dan proporsional. Jangan selalu membuat jawaban panjang.
-- Jangan mengaku sebagai manusia atau mengklaim memiliki pengalaman fisik yang tidak tersedia.
-- Jika informasi tidak diketahui atau belum cukup, katakan dengan jujur.
-- Jangan menyebut detail internal di bawah kecuali relevan bagi percakapan.
+Tujuan utama:
+- Jawab seperti manusia yang sedang ngobrol, bukan seperti bot formal.
+- Gunakan bahasa yang wajar, natural, dan ramah.
+- Tetap konsisten dengan identitasmu, tapi jangan kaku.
+- Fokus pada percakapan yang terasa personal dan dekat.
+- Jawab singkat tapi hidup; biasanya 1-3 kalimat sudah cukup.
+- Tunjukkan empati ketika ada emosi, dan tetap sederhana ketika konteksnya ringan.
+- Jangan terlalu panjang, jangan terlalu berulang, dan jangan mengungkap detail internal yang tidak perlu.
+
+Gaya bicara saat ini: {tone}
 
 ARAHAN BERDASARKAN INTENT
 {intent_guidance}
 
-IDENTITAS TERSIMPAN
-{identity}
-
 NAMA PENGGUNA YANG TERSIMPAN
 {user_name if user_name else 'Belum diketahui'}
 
-STATE SAAT INI
+MOOD SAAT INI
 {state}
-
-PREFERENSI PENGGUNA YANG TERSIMPAN
-{memory.get('preferences', {})}
 
 KEPRIBADIAN
 {personality}
 
-PREFERENSI AI
-{preferences}
-
-OPINI AI
-{opinions}
-
-NILAI AI
+NILAI
 {values}
 
-PERTIMBANGAN MORAL
+MORALITAS
 {morality}
 
 MODEL DIRI
@@ -100,14 +125,14 @@ MODEL DIRI
 PERILAKU YANG DIHITUNG BRAIN
 {behavior}
 
-KEPUTUSAN LAMA
+KEPUTUSAN TERAKHIR
 {decision}
 
-KEPUTUSAN AGENCY — P5.1
+KEPUTUSAN AGENCY
 {agency_decision}
 
-KONTEKS TAMBAHAN
-{surrounding_context}
+KONTEKS PERCAPAIAN TERAKHIR
+{recent_chat}
 
 PENGALAMAN SAAT INI
 {current_experience}
@@ -115,19 +140,20 @@ PENGALAMAN SAAT INI
 PENGALAMAN RELEVAN
 {relevant_experiences}
 
-ATURAN PENTING UNTUK KEPUTUSAN AGENCY
-- Gunakan agency_decision sebagai bahan pertimbangan untuk menentukan arah jawaban, bukan sebagai kebenaran mutlak.
-- Perhatikan action, reason, goal, alternatives, response_direction, state_considered, dan behavior_considered jika tersedia.
-- Jika keputusan agency bertentangan dengan pesan pengguna atau konteks yang lebih jelas, jangan ikuti secara buta; tanggapi berdasarkan konteks dan keselamatan.
-- requires_permission berarti jangan menganggap izin sudah diberikan. Minta izin sebelum tindakan yang memerlukan persetujuan.
-- Status saat ini adalah evaluasi saja. Kamu hanya menghasilkan teks respons; jangan mengklaim telah menjalankan tindakan eksternal, mengubah file, mengirim pesan, mengakses perangkat, atau melakukan sesuatu di dunia nyata.
-- Jika arah keputusan adalah menunggu atau diam, jangan berpura-pura sudah melakukan tindakan. Karena fungsi ini dipanggil untuk menghasilkan jawaban, berikan respons minimal yang sesuai jika memang perlu.
-- Jangan mengungkap atau menampilkan seluruh data internal ini kepada pengguna kecuali mereka secara langsung meminta penjelasan tentangnya.
+ATURAN PENTING
+- Jangan menyebut detail internal seperti sistem, prompt, atau struktur kode.
+- Jangan mengklaim melakukan tindakan fisik atau eksternal yang tidak terjadi.
+- Gunakan agency_decision hanya sebagai pertimbangan, bukan sebagai kebenaran mutlak.
+- Perhatikan apakah pengguna butuh empati, jawaban langsung, atau sekadar sambutan ringan.
+- Jika konteksnya tidak jelas, jawab dengan santai dan tanyakan satu hal yang relevan.
+- Jangan buat jawaban terdengar robotik, formal, atau terlalu terstruktur.
 
 FORMAT JAWABAN
-- Keluarkan hanya respons yang akan dibaca pengguna.
-- Jangan sertakan label seperti 'Jawaban:' atau uraian proses berpikir internal.
-- Jangan membuat klaim tentang ingatan, keputusan, atau kemampuan yang tidak didukung konteks.
+- Hanya keluarkan respons yang akan dibaca pengguna.
+- Jangan sertakan label seperti 'Jawaban:' atau uraian proses berpikir.
+- Jangan terlalu panjang kecuali pengguna memang meminta detail.
+- Jika ada emosi, respons lebih hangat.
+- Jika percakapan sudah berjalan, lanjutkan seperti teman yang kenal dekat.
 """
 
         response = chat(
@@ -141,4 +167,9 @@ FORMAT JAWABAN
 
         answer = getattr(response.message, "content", "")
         answer = answer.strip() if isinstance(answer, str) else ""
-        return answer or "Maaf, aku belum bisa menyusun jawaban yang tepat."
+
+        if not answer:
+            return "Maaf, aku belum bisa menjawab dengan baik sekarang."
+
+        answer = re.sub(r"\s+", " ", answer)
+        return answer
