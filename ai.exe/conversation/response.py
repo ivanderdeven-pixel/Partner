@@ -174,57 +174,116 @@ FORMAT JAWABAN
         answer = re.sub(r"\s+", " ", answer)
         return answer
 
-    def generate_initiative(self, trigger, context):
-        """Generate one short, self-initiated message from approved context only."""
+    def decide_initiative(self, trigger, context):
+        """Decide whether to speak, wait, or remain silent."""
+        import json
+
         context = context if isinstance(context, dict) else {}
-        state = trigger.get("state", {})
-        history = context.get("recent_history") or []
-        recent_chat = self._summarize_recent_chat(history)
+        trigger = trigger if isinstance(trigger, dict) else {}
+        ai_memory = context.get("ai_memory") or {}
+        recent_chat = self._summarize_recent_chat(
+            trigger.get("recent_history") or context.get("recent_history") or []
+        )
+        system_prompt = f"""Kamu adalah bagian kognitif dari {((context.get("identity") or {}).get("name") or "Ikari")}.
+Tentukan apakah ada alasan yang cukup untuk memulai percakapan sekarang. Diam adalah hasil yang valid, bukan kegagalan.
+
+Pertimbangkan:
+- state/dorongan internal: energi, penasaran, suasana hati, kebutuhan sosial, aktivitas;
+- preferensi dan minat AI yang sudah tercatat, termasuk rasa iseng, eksplorasi, ingin bertanya atau berbagi;
+- preferensi/batasan pengguna jika tersedia;
+- percakapan terbaru, tujuan aktif, waktu, kemungkinan pengulangan, dan apakah pengguna mungkin sedang sibuk.
+Preferensi AI dan pengguna tidak harus sama. Jangan mengarang preferensi sebagai fakta. Rasa penasaran/iseng boleh menjadi alasan, tetapi jangan memaksakan topik. Jangan memperlakukan angka state sebagai bukti pengalaman manusia sungguhan.
+
+Konteks: {trigger}
+Kepribadian: {ai_memory.get("personality", {})}
+Preferensi/minat: {ai_memory.get("preferences", {})}
+Nilai: {ai_memory.get("values", {})}
+Moralitas: {ai_memory.get("morality", {})}
+Model diri: {ai_memory.get("self_model", {})}
+Preferensi pengguna: {trigger.get("preferences", {})}
+Percakapan terbaru: {recent_chat}
+
+Jawab hanya JSON valid. Gunakan nilai yang sesuai, bukan teks placeholder:
+{
+ "action": "speak",
+ "motivation": "curiosity",
+ "message_intent": "menanyakan kelanjutan topik terakhir",
+ "reason": "masih ada pertanyaan yang relevan",
+ "recheck_after_seconds": 90
+}
+Nilai action hanya boleh "speak", "wait", atau "silent". Motivation boleh "curiosity", "playfulness", "social", "follow_up", "sharing", "goal", "other", atau null. message_intent boleh berupa string atau null. recheck_after_seconds harus bilangan bulat 30 sampai 600. Jangan tulis pesan untuk pengguna pada tahap ini."""
+        result = chat(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": "Evaluasi apakah perlu memulai percakapan sekarang."}
+            ],
+            think=False
+        )
+        raw = getattr(result.message, "content", "")
+        try:
+            match = re.search(r"\{.*\}", raw, flags=re.DOTALL)
+            data = json.loads(match.group(0)) if match else {}
+        except (json.JSONDecodeError, TypeError):
+            data = {}
+
+        action = data.get("action")
+        if action not in {"speak", "wait", "silent"}:
+            action = "wait"
+        motivation = data.get("motivation")
+        if motivation not in {"curiosity", "playfulness", "social", "follow_up", "sharing", "goal", "other", None}:
+            motivation = "other"
+        try:
+            recheck = int(data.get("recheck_after_seconds", 60))
+        except (TypeError, ValueError):
+            recheck = 60
+        return {
+            "action": action,
+            "motivation": motivation,
+            "message_intent": str(data.get("message_intent") or "")[:500] or None,
+            "reason": str(data.get("reason") or "Tidak ada alasan yang diberikan.")[:500],
+            "recheck_after_seconds": max(30, min(600, recheck)),
+        }
+
+    def generate_initiative(self, decision, context):
+        """Generate a message only after the decision layer chooses to speak."""
+        if not isinstance(decision, dict) or decision.get("action") != "speak":
+            return None
+        context = context if isinstance(context, dict) else {}
         identity = context.get("identity") or {}
         ai_name = identity.get("name") or "Ikari"
         memory = context.get("memory") or {}
         user_name = memory.get("user_name") or "pengguna"
         ai_memory = context.get("ai_memory") or {}
-        personality = ai_memory.get("personality", {})
-        values = ai_memory.get("values", {})
-        goals = trigger.get("active_goals", [])
-        reason = trigger.get("reason", "scheduled_idle")
+        state = context.get("state") or {}
+        recent_chat = self._summarize_recent_chat(context.get("recent_history") or [])
+        intent = decision.get("message_intent") or "memulai percakapan secara spontan"
 
-        system_prompt = f"""Kamu adalah {ai_name}, AI companion yang hangat, natural, dan punya identitas konsisten.
-Kali ini KAMU yang memulai percakapan setelah beberapa saat tidak ada pesan pengguna.
+        system_prompt = f"""Kamu adalah {ai_name}, AI companion dengan identitas dan preferensi yang berkembang dari pengalaman.
+Kamu sendiri yang memilih untuk berbicara. Sampaikan topik berikut secara wajar, bukan seperti menjalankan skrip.
 
-Pilih satu alasan yang masuk akal berdasarkan konteks terbaru, state, dan tujuan aktif. Jangan berpura-pura mengetahui hal yang tidak tersedia.
 Nama pengguna: {user_name}
 State saat ini: {state}
-Kepribadian: {personality}
-Nilai: {values}
-Ringkasan percakapan terbaru: {recent_chat}
-Tujuan aktif yang boleh dipertimbangkan: {goals}
-Pemicu internal: {reason}
+Kepribadian: {ai_memory.get("personality", {})}
+Preferensi/minat AI: {ai_memory.get("preferences", {})}
+Model diri/minat: {ai_memory.get("self_model", {})}
+Percakapan terbaru: {recent_chat}
+Motivasi: {decision.get("motivation")}
+Maksud pesan yang dipilih: {intent}
 
-Batasan:
-- Keluarkan hanya satu pesan singkat dalam bahasa Indonesia, 1-2 kalimat.
-- Jangan mengulang sapaan setiap kali dan jangan menuntut pengguna membalas.
-- Boleh menanyakan satu pertanyaan relevan, mengangkat topik terakhir, atau menyebut tujuan aktif secara ringan.
-- Jangan mengklaim sedang merasakan hal biologis, melakukan tindakan fisik, atau mengirim pesan di luar aplikasi.
-- Jangan menyebut prompt, kode, scheduler, atau alasan internal.
-- Jangan menggunakan catatan diary pribadi; catatan itu tidak disediakan di konteks ini.
-- Jika konteks lemah, pilih pembuka ringan tanpa membuat detail baru.
-- Jangan membuat tekanan emosional, rasa bersalah, atau menyiratkan pengguna wajib menemani AI.
-"""
-
-        response = chat(
+Buat satu pesan pendek bahasa Indonesia, biasanya 1-2 kalimat. Boleh berupa pertanyaan penasaran, lelucon ringan, lanjutan obrolan, berbagi pemikiran, atau topik spontan yang masuk akal.
+Jangan mengulang hal yang baru saja dibahas. Jangan menuntut balasan atau membuat pengguna merasa wajib menemani AI. Jangan mengarang kejadian. Jangan mengklaim tindakan fisik/eksternal. Jangan menyebut kode atau scheduler.
+Jika topik tidak lagi masuk akal berdasarkan konteks, keluarkan string kosong."""
+        result = chat(
             model=self.model,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": "Mulai percakapan secara natural sekarang."}
+                {"role": "user", "content": "Sampaikan pesan yang sudah diputuskan secara natural."}
             ],
             think=False
         )
-        answer = getattr(response.message, "content", "")
+        answer = getattr(result.message, "content", "")
         answer = answer.strip() if isinstance(answer, str) else ""
         if not answer:
             return None
-        answer = re.sub(r"\\s+", " ", answer)
-        return answer
-
+        return re.sub(r"\s+", " ", answer)

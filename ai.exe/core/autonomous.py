@@ -1,7 +1,8 @@
-"""Bounded scheduler for self-initiated conversation.
+"""Decision-cycle scheduler for self-initiated conversation.
 
-Only produces local terminal messages. It does not contact external services,
-inspect private diary entries, or perform actions outside the application.
+The scheduler decides when to ask the cognition layer for an evaluation; it
+does not decide that the AI must speak. Timing values are resource/interaction
+guards, not personality rules. This module performs no external actions.
 """
 import time
 from datetime import datetime
@@ -11,20 +12,20 @@ class AutonomousResponse:
     def __init__(
         self,
         enabled=True,
-        idle_seconds=180,
-        cooldown_seconds=900,
-        max_per_session=3,
+        idle_grace_seconds=60,
+        evaluation_interval_seconds=30,
         clock=None,
     ):
         self.enabled = bool(enabled)
-        self.idle_seconds = max(30, int(idle_seconds))
-        self.cooldown_seconds = max(60, int(cooldown_seconds))
-        self.max_per_session = max(0, int(max_per_session))
+        self.idle_grace_seconds = max(1, int(idle_grace_seconds))
+        self.evaluation_interval_seconds = max(1, int(evaluation_interval_seconds))
         self._clock = clock or time.monotonic
         self.last_user_activity = self._clock()
+        self.last_evaluation = None
+        self.next_evaluation_at = None
         self.last_initiative = None
-        self.sent_this_session = 0
-        self.last_reason = None
+        self.evaluations_this_session = 0
+        self.initiatives_this_session = 0
 
     def user_interacted(self):
         self.last_user_activity = self._clock()
@@ -32,77 +33,86 @@ class AutonomousResponse:
     def set_enabled(self, enabled):
         self.enabled = bool(enabled)
 
-    def evaluate(self, state, recent_history, active_goals=None, force=False):
-        """Return a small trigger description or None; never generates speech itself."""
+    def evaluate(
+        self,
+        state,
+        recent_history,
+        active_goals=None,
+        preferences=None,
+        self_model=None,
+        force=False,
+    ):
+        """Return a context snapshot when a decision cycle is due, else None.
+
+        `force=True` requests a decision cycle now; it does not force speech.
+        """
         if not self.enabled and not force:
-            return None
-        if self.sent_this_session >= self.max_per_session and not force:
             return None
 
         now = self._clock()
         idle_for = max(0, now - self.last_user_activity)
-        if not force and idle_for < self.idle_seconds:
+        if not force and idle_for < self.idle_grace_seconds:
+            return None
+        if not force and self.next_evaluation_at is not None and now < self.next_evaluation_at:
             return None
         if (
             not force
-            and self.last_initiative is not None
-            and now - self.last_initiative < self.cooldown_seconds
+            and self.next_evaluation_at is None
+            and self.last_evaluation is not None
+            and now - self.last_evaluation < self.evaluation_interval_seconds
         ):
             return None
 
-        state = state or {}
-        history = recent_history or []
+        state = state if isinstance(state, dict) else {}
+        history = recent_history if isinstance(recent_history, list) else []
         goals = [
             goal for goal in (active_goals or [])
             if isinstance(goal, dict) and goal.get("status", "active") == "active"
         ]
 
-        # Avoid repeatedly interrupting when the user is likely done or the
-        # internal state suggests rest. These are transparent heuristics.
-        mood = state.get("mood", "calm")
-        energy = state.get("energy", 100)
-        social = state.get("social", 50)
-        curiosity = state.get("curiosity", 50)
-        if not force and (mood == "tired" or energy < 20):
-            return None
-
         last_user_text = ""
         last_assistant_text = ""
-        if history:
-            last = history[-1]
-            if isinstance(last, dict):
-                last_user_text = str(last.get("user", ""))[:300]
-                last_assistant_text = str(last.get("ai", last.get("assistant", "")))[:300]
+        if history and isinstance(history[-1], dict):
+            last_user_text = str(history[-1].get("user", ""))[:500]
+            last_assistant_text = str(
+                history[-1].get("ai", history[-1].get("assistant", ""))
+            )[:500]
 
-        reason = "scheduled_idle"
-        if curiosity >= 70:
-            reason = "curiosity"
-        elif social < 30:
-            reason = "social_state"
-        elif goals:
-            reason = "active_goal"
-        elif last_user_text:
-            reason = "conversation_followup"
-
-        self.last_reason = reason
         return {
-            "reason": reason,
             "idle_seconds": int(idle_for),
             "state": {
-                "mood": mood,
-                "energy": energy,
-                "social": social,
-                "curiosity": curiosity,
+                key: state.get(key)
+                for key in ("mood", "energy", "social", "curiosity", "activity")
+                if key in state
             },
             "last_user_text": last_user_text,
             "last_assistant_text": last_assistant_text,
-            "active_goals": [str(goal.get("title", ""))[:120] for goal in goals[:3]],
+            "active_goals": [
+                {"title": str(goal.get("title", ""))[:160],
+                 "target_date": goal.get("target_date")}
+                for goal in goals[:10]
+            ],
+            "preferences": preferences if isinstance(preferences, dict) else {},
+            "self_model": self_model if isinstance(self_model, dict) else {},
+            "recent_history": history[-8:],
             "local_time": datetime.now().astimezone().isoformat(timespec="minutes"),
-            "forced": bool(force),
+            "forced_evaluation": bool(force),
+            "last_initiative_seconds_ago": (
+                None if self.last_initiative is None
+                else max(0, int(now - self.last_initiative))
+            ),
         }
 
-    def mark_sent(self):
-        now = self._clock()
-        self.last_initiative = now
-        self.last_user_activity = now
-        self.sent_this_session += 1
+    def mark_evaluated(self):
+        self.last_evaluation = self._clock()
+        self.evaluations_this_session += 1
+
+    def schedule_next_evaluation(self, seconds):
+        """Set a context-dependent recheck time suggested by the decision layer."""
+        delay = max(30, min(600, int(seconds)))
+        self.next_evaluation_at = self._clock() + delay
+
+    def mark_spoken(self):
+        """Record speech for context and duplicate-awareness, not as a cooldown."""
+        self.last_initiative = self._clock()
+        self.initiatives_this_session += 1

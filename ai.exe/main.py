@@ -150,10 +150,11 @@ def main():
     print("    /goal-done <ID>, /reflect <pengamatan> | <pelajaran> | <langkah>,")
     print("    /reflections, /milestones, /time")
     print("Autonomous response: /initiative status | on | off | now")
-    print(f"[Autonomous] Aktif; inisiatif setelah {autonomous.idle_seconds} detik idle, cooldown {autonomous.cooldown_seconds} detik.")
+    print(f"[Autonomous] Evaluasi keputusan saat idle (jeda teknis minimal {autonomous.idle_grace_seconds} detik).")
+    print("Inisiatif bisa berupa penasaran, iseng, follow-up, berbagi, atau memilih diam.")
 
-    # A dedicated input thread lets the main loop check scheduled initiatives
-    # while the terminal is waiting for the next line.
+    # A dedicated input thread lets the main loop check for decision cycles
+    # while waiting for terminal input. The scheduler itself never forces speech.
     input_queue = queue.Queue()
 
     def input_worker():
@@ -165,6 +166,40 @@ def main():
                 return
             input_queue.put(value)
 
+    def run_initiative_cycle(force=False):
+        recent = history.get_recent(8)
+        latest_user_text = recent[-1].get("user", "") if recent and isinstance(recent[-1], dict) else ""
+        context = {
+            "identity": brain.analyze_identity(),
+            "state": brain.analyze_state(),
+            "memory": brain.analyze_memory(),
+            "ai_memory": brain.analyze_ai_memory(latest_user_text),
+            "recent_history": recent,
+        }
+        trigger = autonomous.evaluate(
+            state=context["state"],
+            recent_history=recent,
+            active_goals=life.get_goals(status="active"),
+            preferences=context["memory"],
+            self_model=(context["ai_memory"] or {}).get("self_model", {}),
+            force=force,
+        )
+        if not trigger:
+            return None
+
+        autonomous.mark_evaluated()
+        decision = response.decide_initiative(trigger, context)
+        autonomous.schedule_next_evaluation(decision.get("recheck_after_seconds", 60))
+
+        if decision.get("action") == "speak":
+            message = response.generate_initiative(decision, context)
+            if message:
+                print(f"\n{ai_name} (inisiatif): {message}")
+                history.add("[inisiatif]", message)
+                autonomous.mark_spoken()
+                return decision
+        return decision
+
     threading.Thread(target=input_worker, daemon=True).start()
 
     running = True
@@ -172,32 +207,12 @@ def main():
         try:
             user_input = input_queue.get(timeout=1.0).strip()
         except queue.Empty:
-            trigger = autonomous.evaluate(
-                state=brain.analyze_state(),
-                recent_history=history.get_recent(5),
-                active_goals=life.get_goals(status="active"),
-            )
-            if trigger:
-                try:
-                    context = {
-                        "identity": brain.analyze_identity(),
-                        "state": brain.analyze_state(),
-                        "memory": brain.analyze_memory(),
-                        "ai_memory": brain.analyze_ai_memory(
-                            history.get_recent(1)[-1].get("user", "")
-                            if history.get_recent(1) else ""
-                        ),
-                        "recent_history": history.get_recent(5),
-                    }
-                    message = response.generate_initiative(trigger, context)
-                    if message:
-                        print(f"\n{ai_name} (inisiatif): {message}")
-                        history.add("[inisiatif]", message)
-                        autonomous.mark_sent()
-                except Exception as error:
-                    # A failed local model call should not kill the chat loop.
-                    print(f"\n[Autonomous] Gagal membuat pesan: {error}")
-                    autonomous.mark_sent()
+            try:
+                run_initiative_cycle()
+            except Exception as error:
+                # A failed local model call should not kill the chat loop.
+                print(f"\n[Autonomous] Evaluasi belum berhasil: {error}")
+                autonomous.schedule_next_evaluation(60)
             continue
 
         autonomous.user_interacted()
@@ -212,47 +227,30 @@ def main():
             option = argument.strip().lower()
             if option == "on":
                 autonomous.set_enabled(True)
-                print(f"[Autonomous] Aktif. Ambang idle {autonomous.idle_seconds} detik.")
+                print("[Autonomous] Inisiatif aktif; keputusan tetap dapat berupa diam.")
             elif option == "off":
                 autonomous.set_enabled(False)
-                print("[Autonomous] Dimatikan untuk sesi ini.")
+                print("[Autonomous] Inisiatif otomatis dimatikan untuk sesi ini.")
             elif option == "status" or not option:
                 status = "aktif" if autonomous.enabled else "mati"
+                last = "belum ada" if autonomous.last_initiative is None else "pernah"
                 print(
-                    f"[Autonomous] {status}; terkirim {autonomous.sent_this_session}/"
-                    f"{autonomous.max_per_session}; idle {autonomous.idle_seconds}s; "
-                    f"cooldown {autonomous.cooldown_seconds}s."
+                    f"[Autonomous] {status}; evaluasi {autonomous.evaluations_this_session}; "
+                    f"pesan spontan {autonomous.initiatives_this_session}; "
+                    f"terakhir berbicara: {last}; jeda teknis {autonomous.idle_grace_seconds}s."
                 )
             elif option == "now":
-                trigger = autonomous.evaluate(
-                    state=brain.analyze_state(),
-                    recent_history=history.get_recent(5),
-                    active_goals=life.get_goals(status="active"),
-                    force=True,
-                )
-                if not trigger:
-                    print("[Autonomous] Tidak ada pesan yang dibuat.")
-                else:
-                    try:
-                        context = {
-                            "identity": brain.analyze_identity(),
-                            "state": brain.analyze_state(),
-                            "memory": brain.analyze_memory(),
-                            "ai_memory": brain.analyze_ai_memory(
-                                history.get_recent(1)[-1].get("user", "")
-                                if history.get_recent(1) else ""
-                            ),
-                            "recent_history": history.get_recent(5),
-                        }
-                        message = response.generate_initiative(trigger, context)
-                        if message:
-                            print(f"{ai_name} (inisiatif): {message}")
-                            history.add("[inisiatif]", message)
-                            autonomous.mark_sent()
-                        else:
-                            print("[Autonomous] Model tidak menghasilkan pesan.")
-                    except Exception as error:
-                        print(f"[Autonomous] Gagal membuat pesan: {error}")
+                try:
+                    decision = run_initiative_cycle(force=True)
+                    if not decision:
+                        print("[Autonomous] Siklus evaluasi belum tersedia.")
+                    else:
+                        print(
+                            f"[Autonomous] Keputusan: {decision.get('action')}; "
+                            f"alasan: {decision.get('reason', 'tidak tersedia')}"
+                        )
+                except Exception as error:
+                    print(f"[Autonomous] Evaluasi belum berhasil: {error}")
             else:
                 print("Gunakan /initiative status, /initiative on, /initiative off, atau /initiative now.")
             continue

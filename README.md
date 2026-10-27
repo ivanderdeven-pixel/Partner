@@ -295,26 +295,29 @@ python -m unittest discover -s test
 
 The P6 tests use temporary files and do not alter personal runtime data.
 
-## Autonomous response (P6)
+## Autonomous initiative and self-directed conversation (P6)
 
-The `ai.exe/core/autonomous.py` scheduler enables bounded, self-initiated terminal messages:
-- After 3 minutes without a new input, it may initiate a short conversation.
-- It considers current state, recent chat, and active goals; private diary entries are not passed to the generator.
-- It pauses automatic initiatives when the state is tired/energy is low.
-- Automatic messages have a 15-minute cooldown and a maximum of 3 per session.
-- It only writes to the local terminal and local conversation history; it does not send messages externally.
+The initiative loop separates a technical scheduler from the AI's decision about whether to speak.
 
-Commands during a session:
-- `/initiative status` — show current setting and counters
-- `/initiative on` — enable scheduled initiatives for this session
-- `/initiative off` — disable scheduled initiatives for this session
-- `/initiative now` — request one initiative immediately
+- A short idle grace period avoids evaluating while the user is actively typing.
+- A technical evaluation interval helps control local model/CPU usage; it is not a cooldown on speaking.
+- The decision layer can choose `speak`, `wait`, or `silent`.
+- Possible motivations include curiosity, playfulness, social interest, follow-up, sharing, or an active goal.
+- The decision considers current state, recent conversation, active goals, the available preference/memory context, and the AI's self-model.
+- When the decision is `wait` or `silent`, no message is generated.
+- After each decision, the model may suggest a context-dependent time to evaluate again.
+- There is no universal 15-minute speech cooldown or fixed maximum number of spontaneous messages per session.
+- Automatic output is local to the terminal and local conversation history. It does not send messages externally.
+- User preferences and the AI's evolving preferences may differ; the decision prompt considers both when data is available. Missing preferences should not be invented as facts.
 
-The scheduler and tests are experimental and still need to be run on the target PC with Ollama available. The console input worker may cause terminal prompt/output overlap on some terminals; treat this as a development branch, not a verified release.
+Commands:
+- `/initiative status` — show whether automatic decision cycles are enabled and basic counters
+- `/initiative on` — enable automatic decision cycles for this session
+- `/initiative off` — disable automatic decision cycles for this session
+- `/initiative now` — request an immediate decision cycle; this does not force the AI to speak
 
-Run the scheduler unit tests from the `ai.exe` directory:
+The defaults are experimental engineering parameters, not claims about human behavior. The implementation still needs to be run and tested on the target PC with Ollama available. Terminal prompt/output overlap is still a known risk with the background input worker. Unit tests can be run from the `ai.exe` directory:
 
 ```bash
 python -m unittest test.test_autonomous_response
 ```
-
