@@ -184,6 +184,13 @@ FORMAT JAWABAN
         recent_chat = self._summarize_recent_chat(
             trigger.get("recent_history") or context.get("recent_history") or []
         )
+        decision_schema = """{
+ "action": "speak",
+ "motivation": "curiosity",
+ "message_intent": "menanyakan kelanjutan topik terakhir",
+ "reason": "masih ada pertanyaan yang relevan",
+ "recheck_after_seconds": 90
+}"""
         system_prompt = f"""Kamu adalah bagian kognitif dari {((context.get("identity") or {}).get("name") or "Ikari")}.
 Tentukan apakah ada alasan yang cukup untuk memulai percakapan sekarang. Diam adalah hasil yang valid, bukan kegagalan.
 
@@ -203,14 +210,8 @@ Model diri: {ai_memory.get("self_model", {})}
 Preferensi pengguna: {trigger.get("preferences", {})}
 Percakapan terbaru: {recent_chat}
 
-Jawab hanya JSON valid. Gunakan nilai yang sesuai, bukan teks placeholder:
-{
- "action": "speak",
- "motivation": "curiosity",
- "message_intent": "menanyakan kelanjutan topik terakhir",
- "reason": "masih ada pertanyaan yang relevan",
- "recheck_after_seconds": 90
-}
+Keluarkan JSON valid dengan skema berikut, ganti nilai contoh sesuai keputusanmu:
+{decision_schema}
 Nilai action hanya boleh "speak", "wait", atau "silent". Motivation boleh "curiosity", "playfulness", "social", "follow_up", "sharing", "goal", "other", atau null. message_intent boleh berupa string atau null. recheck_after_seconds harus bilangan bulat 30 sampai 600. Jangan tulis pesan untuk pengguna pada tahap ini."""
         result = chat(
             model=self.model,
