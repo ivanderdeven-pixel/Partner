@@ -177,6 +177,8 @@ class LifeDevelopment:
 
     def mark_started(self, now: Optional[datetime] = None) -> dict:
         current = now or self._now()
+        # Capture the previous-session gap before overwriting last_seen_at.
+        context = self.get_time_context(current)
         self.data["last_seen_at"] = current.isoformat(timespec="seconds")
         self.save()
-        return self.get_time_context(current)
+        return context
