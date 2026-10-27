@@ -22,6 +22,7 @@ class AutonomousResponse:
         self._clock = clock or time.monotonic
         self.last_user_activity = self._clock()
         self.last_evaluation = None
+        self.next_evaluation_at = None
         self.last_initiative = None
         self.evaluations_this_session = 0
         self.initiatives_this_session = 0
@@ -52,8 +53,11 @@ class AutonomousResponse:
         idle_for = max(0, now - self.last_user_activity)
         if not force and idle_for < self.idle_grace_seconds:
             return None
+        if not force and self.next_evaluation_at is not None and now < self.next_evaluation_at:
+            return None
         if (
             not force
+            and self.next_evaluation_at is None
             and self.last_evaluation is not None
             and now - self.last_evaluation < self.evaluation_interval_seconds
         ):
@@ -102,6 +106,11 @@ class AutonomousResponse:
     def mark_evaluated(self):
         self.last_evaluation = self._clock()
         self.evaluations_this_session += 1
+
+    def schedule_next_evaluation(self, seconds):
+        """Set a context-dependent recheck time suggested by the decision layer."""
+        delay = max(30, min(600, int(seconds)))
+        self.next_evaluation_at = self._clock() + delay
 
     def mark_spoken(self):
         """Record speech for context and duplicate-awareness, not as a cooldown."""
