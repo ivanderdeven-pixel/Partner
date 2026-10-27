@@ -111,6 +111,7 @@ def handle_life_command(user_input, life, ai_name):
     return False
 
 
+
 def main():
     print("program start")
 
@@ -124,29 +125,19 @@ def main():
     history = ConversationHistory()
     brain = Brain(state, history, memory, ai_memory)
     response = Response()
+    autonomous = AutonomousResponse()
 
-    ai_name = brain.ai_memory.get_ai_name()
-    if ai_name is None:
-        # Retain the current repository's name setup behavior.
-        ai_name = memory.get("ai_name")
-
-    updater = threading.Thread(
-        target=state_updater,
-        args=(state,),
-        daemon=True
-    )
+    updater = threading.Thread(target=state_updater, args=(state,), daemon=True)
     updater.start()
 
     user_name = memory.get("user_name")
-
     if user_name is None:
-        user_name = input("??? : Siapa kamu?\nUser: ")
+        user_name = input("??? : Siapa kamu?\nUser: ").strip()
         memory.set("user_name", user_name)
 
     ai_name = memory.get("ai_name")
-
     if ai_name is None:
-        ai_name = input("??? : Siapa namaku?\nUser: ")
+        ai_name = input("??? : Siapa namaku?\nUser: ").strip()
         memory.set("ai_name", ai_name)
 
     print()
@@ -156,47 +147,133 @@ def main():
     print("P6: /diary <catatan>, /diary show, /goal <tujuan>, /goals,")
     print("    /goal-done <ID>, /reflect <pengamatan> | <pelajaran> | <langkah>,")
     print("    /reflections, /milestones, /time")
+    print("Autonomous response: /initiative status | on | off | now")
+    print(f"[Autonomous] Aktif; inisiatif setelah {autonomous.idle_seconds} detik idle, cooldown {autonomous.cooldown_seconds} detik.")
 
-    while True:
-        user_input = input(
-            f"{user_name} (ketik /voice untuk bicara): "
-        ).strip()
+    # A dedicated input thread lets the main loop check scheduled initiatives
+    # while the terminal is waiting for the next line.
+    input_queue = queue.Queue()
+
+    def input_worker():
+        while True:
+            try:
+                value = input(f"{user_name} (ketik /voice untuk bicara): ")
+            except (EOFError, KeyboardInterrupt):
+                input_queue.put("exit")
+                return
+            input_queue.put(value)
+
+    threading.Thread(target=input_worker, daemon=True).start()
+
+    running = True
+    while running:
+        try:
+            user_input = input_queue.get(timeout=1.0).strip()
+        except queue.Empty:
+            trigger = autonomous.evaluate(
+                state=brain.analyze_state(),
+                recent_history=history.get_recent(5),
+                active_goals=life.get_goals(status="active"),
+            )
+            if trigger:
+                try:
+                    context = {
+                        "identity": brain.analyze_identity(),
+                        "state": brain.analyze_state(),
+                        "memory": brain.analyze_memory(),
+                        "ai_memory": brain.analyze_ai_memory(
+                            history.get_recent(1)[-1].get("user", "")
+                            if history.get_recent(1) else ""
+                        ),
+                        "recent_history": history.get_recent(5),
+                    }
+                    message = response.generate_initiative(trigger, context)
+                    if message:
+                        print(f"\n{ai_name} (inisiatif): {message}")
+                        history.add("[inisiatif]", message)
+                        autonomous.mark_sent()
+                except Exception as error:
+                    # A failed local model call should not kill the chat loop.
+                    print(f"\n[Autonomous] Gagal membuat pesan: {error}")
+                    autonomous.mark_sent()
+            continue
+
+        autonomous.user_interacted()
 
         if user_input.lower() == "exit":
-            print(
-                f"{ai_name}: Dimengerti, "
-                f"Sampai jumpa lagi, {user_name}."
-            )
-            break
+            print(f"{ai_name}: Dimengerti, sampai jumpa lagi, {user_name}.")
+            running = False
+            continue
 
-        # Local P6 commands are handled separately from normal chat.
+        if user_input.lower().startswith("/initiative"):
+            _, _, argument = user_input.partition(" ")
+            option = argument.strip().lower()
+            if option == "on":
+                autonomous.set_enabled(True)
+                print(f"[Autonomous] Aktif. Ambang idle {autonomous.idle_seconds} detik.")
+            elif option == "off":
+                autonomous.set_enabled(False)
+                print("[Autonomous] Dimatikan untuk sesi ini.")
+            elif option == "status" or not option:
+                status = "aktif" if autonomous.enabled else "mati"
+                print(
+                    f"[Autonomous] {status}; terkirim {autonomous.sent_this_session}/"
+                    f"{autonomous.max_per_session}; idle {autonomous.idle_seconds}s; "
+                    f"cooldown {autonomous.cooldown_seconds}s."
+                )
+            elif option == "now":
+                trigger = autonomous.evaluate(
+                    state=brain.analyze_state(),
+                    recent_history=history.get_recent(5),
+                    active_goals=life.get_goals(status="active"),
+                    force=True,
+                )
+                if not trigger:
+                    print("[Autonomous] Tidak ada pesan yang dibuat.")
+                else:
+                    try:
+                        context = {
+                            "identity": brain.analyze_identity(),
+                            "state": brain.analyze_state(),
+                            "memory": brain.analyze_memory(),
+                            "ai_memory": brain.analyze_ai_memory(
+                                history.get_recent(1)[-1].get("user", "")
+                                if history.get_recent(1) else ""
+                            ),
+                            "recent_history": history.get_recent(5),
+                        }
+                        message = response.generate_initiative(trigger, context)
+                        if message:
+                            print(f"{ai_name} (inisiatif): {message}")
+                            history.add("[inisiatif]", message)
+                            autonomous.mark_sent()
+                        else:
+                            print("[Autonomous] Model tidak menghasilkan pesan.")
+                    except Exception as error:
+                        print(f"[Autonomous] Gagal membuat pesan: {error}")
+            else:
+                print("Gunakan /initiative status, /initiative on, /initiative off, atau /initiative now.")
+            continue
+
         if user_input.startswith("/") and handle_life_command(user_input, life, ai_name):
             continue
 
-        # P4.6: voice input remains available but is not changed by this P6 work.
         if user_input.lower() == "/voice":
             print("Mendengarkan selama 5 detik...")
             voice_result = brain.listen(duration=5, input_device=1)
-
             if not voice_result.get("success"):
-                print(
-                    f"{ai_name}: Maaf, suara belum bisa "
-                    f"diproses. {voice_result.get('error', '')}"
-                )
+                print(f"{ai_name}: Maaf, suara belum bisa diproses. {voice_result.get('error', '')}")
                 continue
-
             user_input = voice_result.get("text", "").strip()
             if not user_input:
                 print(f"{ai_name}: Aku belum menangkap ucapanmu.")
                 continue
-
             print(f"[Transkripsi] {user_input}")
+            autonomous.user_interacted()
             if user_input.lower() == "exit":
-                print(
-                    f"{ai_name}: Dimengerti, "
-                    f"Sampai jumpa lagi, {user_name}."
-                )
-                break
+                print(f"{ai_name}: Dimengerti, sampai jumpa lagi, {user_name}.")
+                running = False
+                continue
 
         if not user_input:
             continue
@@ -213,7 +290,7 @@ def main():
             ai_experience = thought["ai_experience"]
             ai_experience["context"] = {
                 "mood": thought["state"]["mood"],
-                "activity": thought["state"]["activity"]
+                "activity": thought["state"]["activity"],
             }
             ai_memory.add_experience(ai_experience)
 
