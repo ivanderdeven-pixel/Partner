@@ -1,4 +1,4 @@
-
+import re
 import time
 
 import numpy as np
@@ -9,7 +9,7 @@ import whisper
 
 
 class Hearing:
-    def __init__(self, model_size="base"):
+    def __init__(self, model_size="small"):
         self.model = whisper.load_model(model_size)
 
     @staticmethod
@@ -23,44 +23,52 @@ class Hearing:
         }
 
     @staticmethod
+    def _cleanup_transcript(text):
+        if not text:
+            return ""
+
+        text = str(text).replace("\n", " ").strip()
+        text = re.sub(r"\s+", " ", text)
+        text = re.sub(r"\b(?:uh|eh|mm|hm|mhm)\b", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\s{2,}", " ", text).strip(" .,:;!?-\"")
+        return text
+
+    @staticmethod
     def _detect_speech(audio, sample_rate=16000):
-        """Energy-based VAD: memperkirakan rentang ucapan dari energi audio."""
-        frame_size = int(sample_rate * 0.03)  # frame 30 ms
+        """Energy-based VAD with minimum speech duration."""
+        frame_size = int(sample_rate * 0.02)
 
         if len(audio) < frame_size:
             return audio, False
 
         frame_count = len(audio) // frame_size
-        frames = audio[:frame_count * frame_size].reshape(
-            frame_count, frame_size
-        )
-
+        frames = audio[:frame_count * frame_size].reshape(frame_count, frame_size)
         frame_rms = np.sqrt(np.mean(frames ** 2, axis=1))
 
-        # Ambang adaptif dengan batas minimum dan maksimum.
-        noise_estimate = float(np.percentile(frame_rms, 20))
-        threshold = max(0.0015, min(0.015, noise_estimate * 1.5))
-
+        noise_estimate = float(np.percentile(frame_rms, 25))
+        threshold = max(0.001, min(0.015, noise_estimate * 1.8))
         active = frame_rms > threshold
 
         if not np.any(active):
             return audio, False
 
-        # Pertahankan jeda pendek agar awal/akhir kata tidak terpotong.
         active_indices = np.flatnonzero(active)
-        padding = int(0.20 / 0.03)
+        min_active_frames = max(4, int(0.35 / 0.02))
 
+        if active_indices.size < min_active_frames:
+            return audio, False
+
+        padding = int(0.20 / 0.02)
         first = max(0, active_indices[0] - padding)
         last = min(frame_count - 1, active_indices[-1] + padding)
 
         start = first * frame_size
         end = min(len(audio), (last + 1) * frame_size)
-
         return audio[start:end], True
 
     @staticmethod
     def _normalize_audio(audio, target_rms=0.04, max_gain=8.0):
-        """Normalisasi terbatas; tidak menaikkan volume tanpa batas."""
+        """Limited normalization to avoid clipping."""
         stats = Hearing._measure(audio)
         current_rms = stats["rms"]
 
@@ -70,9 +78,7 @@ class Hearing:
         gain = min(target_rms / current_rms, max_gain)
         normalized = audio * gain
 
-        # Hindari clipping.
         peak = float(np.max(np.abs(normalized)))
-
         if peak > 0.95:
             normalized = normalized * (0.95 / peak)
 
@@ -81,13 +87,24 @@ class Hearing:
     def listen_and_transcribe(self, duration=5, input_device=1):
         try:
             target_rate = 16000
-            device_info = sd.query_devices(input_device, "input")
-            source_rate = int(device_info["default_samplerate"])
+
+            try:
+                device_info = sd.query_devices(input_device, "input")
+            except Exception:
+                try:
+                    device_info = sd.query_devices(kind="input")
+                    if isinstance(device_info, list) and device_info:
+                        device_info = device_info[0]
+                    else:
+                        device_info = {"default_samplerate": target_rate}
+                except Exception:
+                    device_info = {"default_samplerate": target_rate}
+
+            source_rate = int(device_info.get("default_samplerate", target_rate))
 
             print(f"Mendengarkan selama {duration} detik...")
 
             capture_start = time.perf_counter()
-
             audio = sd.rec(
                 int(duration * source_rate),
                 samplerate=source_rate,
@@ -110,17 +127,14 @@ class Hearing:
                     "Audio terlalu pelan atau mikrofon tidak menangkap suara."
                 )
 
-            # 1. Resampling ke 16 kHz.
             if source_rate != target_rate:
                 divisor = np.gcd(source_rate, target_rate)
-
                 audio = scipy.signal.resample_poly(
                     audio,
                     target_rate // divisor,
                     source_rate // divisor
                 ).astype(np.float32)
 
-            # 2. High-pass filter ringan untuk mengurangi dengung frekuensi rendah.
             sos = scipy.signal.butter(
                 3,
                 80,
@@ -130,78 +144,65 @@ class Hearing:
             )
             audio = scipy.signal.sosfiltfilt(sos, audio).astype(np.float32)
 
-            # 3. Noise suppression.
             suppression_start = time.perf_counter()
-
             audio = nr.reduce_noise(
                 y=audio,
                 sr=target_rate,
                 stationary=False,
-                prop_decrease=0.65
+                prop_decrease=0.7
             ).astype(np.float32)
-
             suppression_seconds = time.perf_counter() - suppression_start
             after_suppression = self._measure(audio)
 
-            # 4. Deteksi rentang ucapan.
-            speech_audio, has_speech = self._detect_speech(
-                audio,
-                target_rate
-            )
-
+            speech_audio, has_speech = self._detect_speech(audio, target_rate)
             if not has_speech:
                 raise ValueError(
-                    "Ucapan tidak terdeteksi. Coba bicara lebih jelas "
-                    "atau periksa noise suppression."
+                    "Ucapan tidak terdeteksi. Coba bicara lebih jelas atau periksa mikrofon."
                 )
 
-            # 5. Normalisasi level setelah noise suppression.
             audio = self._normalize_audio(speech_audio)
-
             after = self._measure(audio)
 
-            # 6. Transkripsi Whisper.
             transcription_start = time.perf_counter()
+            text = ""
 
-            result = self.model.transcribe(
-                audio,
-                language="id",
-                fp16=False,
-                beam_size=5,
-                condition_on_previous_text=False
-            )
+            for language in ["id", None]:
+                try:
+                    result = self.model.transcribe(
+                        audio,
+                        language=language,
+                        fp16=False,
+                        temperature=0.0,
+                        condition_on_previous_text=False
+                    )
+                    candidate = self._cleanup_transcript(result.get("text", ""))
+                    if candidate:
+                        text = candidate
+                        break
+                except Exception:
+                    continue
 
-            transcription_seconds = (
-                time.perf_counter() - transcription_start
-            )
-
-            text = result["text"].strip()
+            transcription_seconds = time.perf_counter() - transcription_start
 
             print(
-                f"[Audio] Sample rate: {source_rate} Hz "
-                f"→ {target_rate} Hz"
+                f"[Audio] Sample rate: {source_rate} Hz → {target_rate} Hz"
             )
             print(f"[Audio] Durasi rekam: {capture_seconds:.2f} detik")
             print(
-                f"[Level sebelum] Peak: {before['peak']:.4f} | "
-                f"RMS: {before['rms']:.4f}"
+                f"[Level sebelum] Peak: {before['peak']:.4f} | RMS: {before['rms']:.4f}"
             )
             print(
-                f"[Setelah noise suppression] "
-                f"Peak: {after_suppression['peak']:.4f} | "
+                f"[Setelah noise suppression] Peak: {after_suppression['peak']:.4f} | "
                 f"RMS: {after_suppression['rms']:.4f}"
             )
             print(
-                f"[Level untuk Whisper] Peak: {after['peak']:.4f} | "
-                f"RMS: {after['rms']:.4f}"
+                f"[Level untuk Whisper] Peak: {after['peak']:.4f} | RMS: {after['rms']:.4f}"
             )
             print(
-                f"[DSP] Waktu noise suppression: "
-                f"{suppression_seconds:.2f} detik"
+                f"[DSP] Waktu noise suppression: {suppression_seconds:.2f} detik"
             )
             print(
-                f"[Whisper] Waktu transkripsi: "
-                f"{transcription_seconds:.2f} detik"
+                f"[Whisper] Waktu transkripsi: {transcription_seconds:.2f} detik"
             )
             print(f"[Transkripsi] {text or '(kosong)'}")
 
