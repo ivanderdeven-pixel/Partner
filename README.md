@@ -20,7 +20,7 @@ The core concept behind this project is:
 
 This is intentionally a prototype and experimental project rather than a production-grade product.
 
-## Why it is called a Giftia-style project
+## Why it is called a Giftia project
 
 The term "Giftia" here refers to an AI companion with a personality and emotional presence, not a literal executable program or a commercial product. The project is designed around the feeling of:
 
