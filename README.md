@@ -261,4 +261,6 @@ The `ai.exe` folder is the heart of the project. It contains an experimental AI 
 - persistent data storage
 - a Giftia-inspired personal companion design
 
+recomended to download ollama.cpp or just tune to your own llm
+
 In short, this repository is a small, local implementation of a Giftia-inspired AI companion built as a Python project.
