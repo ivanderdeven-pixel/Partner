@@ -1,9 +1,11 @@
-
+import queue
 import threading
 import time
 
 from core.state import State
 from core.brain import Brain
+from core.life import LifeDevelopment
+from core.autonomous import AutonomousResponse
 from conversation.response import Response
 from conversation.history import ConversationHistory
 from core.memory import Memory
@@ -16,125 +18,287 @@ def state_updater(state):
         time.sleep(0.5)
 
 
+def handle_life_command(user_input, life, ai_name):
+    """Handle local P6 commands without sending private diary text to the LLM."""
+    command, _, argument = user_input.partition(" ")
+    command = command.lower()
+    argument = argument.strip()
+
+    try:
+        if command == "/diary":
+            if argument.lower() == "show":
+                entries = life.get_diary_entries()
+                if not entries:
+                    print(f"{ai_name}: Diary masih kosong.")
+                else:
+                    print(f"{ai_name}: Entri diary terbaru:")
+                    for entry in entries:
+                        print(f"  [{entry['created_at']}] {entry['text']}")
+            elif argument:
+                entry = life.add_diary_entry(argument)
+                print(f"{ai_name}: Entri diary tersimpan secara lokal ({entry['id']}).")
+            else:
+                print("Gunakan /diary <catatan pribadi> atau /diary show.")
+            return True
+
+        if command == "/goal":
+            if argument:
+                goal = life.add_goal(argument)
+                print(f"{ai_name}: Tujuan tersimpan ({goal['id']}): {goal['title']}")
+            else:
+                print("Gunakan /goal <tujuan baru>.")
+            return True
+
+        if command == "/goals":
+            goals = life.get_goals()
+            if not goals:
+                print(f"{ai_name}: Belum ada tujuan yang tersimpan.")
+            else:
+                for goal in goals:
+                    due = f", target {goal['target_date']}" if goal.get("target_date") else ""
+                    print(f"  {goal['id']} [{goal['status']}] {goal['title']}{due}")
+            return True
+
+        if command == "/goal-done":
+            if not argument:
+                print("Gunakan /goal-done <ID tujuan>.")
+            else:
+                goal = life.update_goal_status(argument, "completed")
+                print(f"{ai_name}: Tujuan selesai ditandai: {goal['title']}")
+            return True
+
+        if command == "/reflect":
+            if not argument:
+                print("Gunakan /reflect <pengamatan> | <pelajaran> | <langkah berikutnya>.")
+            else:
+                parts = [part.strip() for part in argument.split("|", 2)]
+                parts += [""] * (3 - len(parts))
+                reflection = life.add_reflection(parts[0], parts[1], parts[2])
+                print(f"{ai_name}: Refleksi tersimpan ({reflection['id']}).")
+            return True
+
+        if command == "/reflections":
+            reflections = life.get_reflections()
+            if not reflections:
+                print(f"{ai_name}: Belum ada refleksi.")
+            else:
+                for item in reflections:
+                    print(f"  [{item['created_at']}] {item['observation']}")
+                    if item.get("lesson"):
+                        print(f"    Pelajaran: {item['lesson']}")
+                    if item.get("next_step"):
+                        print(f"    Langkah berikutnya: {item['next_step']}")
+            return True
+
+        if command == "/milestones":
+            milestones = life.data.get("milestones", [])[-10:][::-1]
+            if not milestones:
+                print(f"{ai_name}: Belum ada milestone.")
+            else:
+                for item in milestones:
+                    print(f"  [{item['created_at']}] {item['title']}: {item['detail']}".rstrip(": "))
+            return True
+
+        if command == "/time":
+            context = life.get_time_context()
+            gap = context["seconds_since_last_seen"]
+            gap_text = "belum tercatat" if gap is None else f"{gap} detik sejak sesi sebelumnya"
+            print(f"Waktu lokal: {context['now']} ({context['daypart']}); {gap_text}.")
+            return True
+
+    except (ValueError, KeyError) as error:
+        print(f"{ai_name}: Perintah belum bisa diproses: {error}")
+        return True
+
+    return False
+
+
+
 def main():
     print("program start")
 
     memory = Memory()
     ai_memory = AIMemory()
+    life = LifeDevelopment()
+    time_context = life.mark_started()
+    print(f"[P6] Sesi dimulai: {time_context['now']} ({time_context['daypart']}).")
 
     state = State()
     history = ConversationHistory()
     brain = Brain(state, history, memory, ai_memory)
     response = Response()
+    autonomous = AutonomousResponse()
 
-    ai_name = brain.ai_memory.get_ai_name()
-    if ai_name is None:
-        brain.ai_memory.set_ai_name()
-
-    updater = threading.Thread(
-        target=state_updater,
-        args=(state,),
-        daemon=True
-    )
+    updater = threading.Thread(target=state_updater, args=(state,), daemon=True)
     updater.start()
 
     user_name = memory.get("user_name")
-
     if user_name is None:
-        user_name = input("??? : Siapa kamu?\nUser: ")
+        user_name = input("??? : Siapa kamu?\nUser: ").strip()
         memory.set("user_name", user_name)
 
     ai_name = memory.get("ai_name")
-
     if ai_name is None:
-        ai_name = input("??? : Siapa namaku?\nUser: ")
+        ai_name = input("??? : Siapa namaku?\nUser: ").strip()
         memory.set("ai_name", ai_name)
 
     print()
     print(f"{ai_name}: Halo {user_name}.")
     print(f"{ai_name}: Bagaimana kabarmu?")
     print()
+    print("P6: /diary <catatan>, /diary show, /goal <tujuan>, /goals,")
+    print("    /goal-done <ID>, /reflect <pengamatan> | <pelajaran> | <langkah>,")
+    print("    /reflections, /milestones, /time")
+    print("Autonomous response: /initiative status | on | off | now")
+    print(f"[Autonomous] Evaluasi keputusan saat idle (jeda teknis minimal {autonomous.idle_grace_seconds} detik).")
+    print("Inisiatif bisa berupa penasaran, iseng, follow-up, berbagi, atau memilih diam.")
 
-    while True:
-        user_input = input(
-            f"{user_name} (ketik /voice untuk bicara): "
-        ).strip()
+    # A dedicated input thread lets the main loop check for decision cycles
+    # while waiting for terminal input. The scheduler itself never forces speech.
+    input_queue = queue.Queue()
+
+    def input_worker():
+        while True:
+            try:
+                value = input(f"{user_name} (ketik /voice untuk bicara): ")
+            except (EOFError, KeyboardInterrupt):
+                input_queue.put("exit")
+                return
+            input_queue.put(value)
+
+    def run_initiative_cycle(force=False):
+        recent = history.get_recent(8)
+        latest_user_text = recent[-1].get("user", "") if recent and isinstance(recent[-1], dict) else ""
+        context = {
+            "identity": brain.analyze_identity(),
+            "state": brain.analyze_state(),
+            "memory": brain.analyze_memory(),
+            "ai_memory": brain.analyze_ai_memory(latest_user_text),
+            "recent_history": recent,
+        }
+        trigger = autonomous.evaluate(
+            state=context["state"],
+            recent_history=recent,
+            active_goals=life.get_goals(status="active"),
+            preferences=context["memory"],
+            self_model=(context["ai_memory"] or {}).get("self_model", {}),
+            force=force,
+        )
+        if not trigger:
+            return None
+
+        autonomous.mark_evaluated()
+        decision = response.decide_initiative(trigger, context)
+        autonomous.schedule_next_evaluation(decision.get("recheck_after_seconds", 60))
+
+        if decision.get("action") == "speak":
+            message = response.generate_initiative(decision, context)
+            if message:
+                print(f"\n{ai_name} (inisiatif): {message}")
+                history.add("[inisiatif]", message)
+                autonomous.mark_spoken()
+                return decision
+        return decision
+
+    threading.Thread(target=input_worker, daemon=True).start()
+
+    running = True
+    while running:
+        try:
+            user_input = input_queue.get(timeout=1.0).strip()
+        except queue.Empty:
+            try:
+                run_initiative_cycle()
+            except Exception as error:
+                # A failed local model call should not kill the chat loop.
+                print(f"\n[Autonomous] Evaluasi belum berhasil: {error}")
+                autonomous.schedule_next_evaluation(60)
+            continue
+
+        autonomous.user_interacted()
 
         if user_input.lower() == "exit":
-            print(
-                f"{ai_name}: Dimengerti, "
-                f"Sampai jumpa lagi, {user_name}."
-            )
-            break
+            print(f"{ai_name}: Dimengerti, sampai jumpa lagi, {user_name}.")
+            running = False
+            continue
 
-        # P4.6: Input suara melalui mikrofon
+        if user_input.lower().startswith("/initiative"):
+            _, _, argument = user_input.partition(" ")
+            option = argument.strip().lower()
+            if option == "on":
+                autonomous.set_enabled(True)
+                print("[Autonomous] Inisiatif aktif; keputusan tetap dapat berupa diam.")
+            elif option == "off":
+                autonomous.set_enabled(False)
+                print("[Autonomous] Inisiatif otomatis dimatikan untuk sesi ini.")
+            elif option == "status" or not option:
+                status = "aktif" if autonomous.enabled else "mati"
+                last = "belum ada" if autonomous.last_initiative is None else "pernah"
+                print(
+                    f"[Autonomous] {status}; evaluasi {autonomous.evaluations_this_session}; "
+                    f"pesan spontan {autonomous.initiatives_this_session}; "
+                    f"terakhir berbicara: {last}; jeda teknis {autonomous.idle_grace_seconds}s."
+                )
+            elif option == "now":
+                try:
+                    decision = run_initiative_cycle(force=True)
+                    if not decision:
+                        print("[Autonomous] Siklus evaluasi belum tersedia.")
+                    else:
+                        print(
+                            f"[Autonomous] Keputusan: {decision.get('action')}; "
+                            f"alasan: {decision.get('reason', 'tidak tersedia')}"
+                        )
+                except Exception as error:
+                    print(f"[Autonomous] Evaluasi belum berhasil: {error}")
+            else:
+                print("Gunakan /initiative status, /initiative on, /initiative off, atau /initiative now.")
+            continue
+
+        if user_input.startswith("/") and handle_life_command(user_input, life, ai_name):
+            continue
+
         if user_input.lower() == "/voice":
             print("Mendengarkan selama 5 detik...")
-
-            voice_result = brain.listen(
-                duration=5,
-                input_device=1
-            )
-
+            voice_result = brain.listen(duration=5, input_device=1)
             if not voice_result.get("success"):
-                print(
-                    f"{ai_name}: Maaf, suara belum bisa "
-                    f"diproses. {voice_result.get('error', '')}"
-                )
+                print(f"{ai_name}: Maaf, suara belum bisa diproses. {voice_result.get('error', '')}")
                 continue
-
             user_input = voice_result.get("text", "").strip()
-
             if not user_input:
                 print(f"{ai_name}: Aku belum menangkap ucapanmu.")
                 continue
-
             print(f"[Transkripsi] {user_input}")
-
+            autonomous.user_interacted()
             if user_input.lower() == "exit":
-                print(
-                    f"{ai_name}: Dimengerti, "
-                    f"Sampai jumpa lagi, {user_name}."
-                )
-                break
+                print(f"{ai_name}: Dimengerti, sampai jumpa lagi, {user_name}.")
+                running = False
+                continue
 
         if not user_input:
             continue
 
         state.apply_event("user_message")
-
         thought = brain.think(user_input)
-
-        llm_context = brain.build_llm_context(
-            thought,
-            user_input
-        )
+        llm_context = brain.build_llm_context(thought, user_input)
 
         if thought["new_memory"] is not None:
             new_memory = thought["new_memory"]
-
-            memory.remember(
-                new_memory["type"],
-                new_memory["value"]
-            )
+            memory.remember(new_memory["type"], new_memory["value"])
 
         if thought["ai_experience"] is not None:
             ai_experience = thought["ai_experience"]
             ai_experience["context"] = {
                 "mood": thought["state"]["mood"],
-                "activity": thought["state"]["activity"]
+                "activity": thought["state"]["activity"],
             }
-
             ai_memory.add_experience(ai_experience)
 
         if thought["important_event"] is not None:
-            important_event = thought["important_event"]
-            ai_memory.add_important_event(important_event)
+            ai_memory.add_important_event(thought["important_event"])
 
         ai_message = response.generate(llm_context)
-
         print(f"{ai_name}: {ai_message}")
-
         history.add(user_input, ai_message)
 
 
