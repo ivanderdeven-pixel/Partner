@@ -294,3 +294,27 @@ python -m unittest discover -s test
 ```
 
 The P6 tests use temporary files and do not alter personal runtime data.
+
+## Autonomous response (P6)
+
+The `ai.exe/core/autonomous.py` scheduler enables bounded, self-initiated terminal messages:
+- After 3 minutes without a new input, it may initiate a short conversation.
+- It considers current state, recent chat, and active goals; private diary entries are not passed to the generator.
+- It pauses automatic initiatives when the state is tired/energy is low.
+- Automatic messages have a 15-minute cooldown and a maximum of 3 per session.
+- It only writes to the local terminal and local conversation history; it does not send messages externally.
+
+Commands during a session:
+- `/initiative status` — show current setting and counters
+- `/initiative on` — enable scheduled initiatives for this session
+- `/initiative off` — disable scheduled initiatives for this session
+- `/initiative now` — request one initiative immediately
+
+The scheduler and tests are experimental and still need to be run on the target PC with Ollama available. The console input worker may cause terminal prompt/output overlap on some terminals; treat this as a development branch, not a verified release.
+
+Run the scheduler unit tests from the `ai.exe` directory:
+
+```bash
+python -m unittest test.test_autonomous_response
+```
+
