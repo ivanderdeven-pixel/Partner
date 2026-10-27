@@ -264,3 +264,33 @@ The `ai.exe` folder is the heart of the project. It contains an experimental AI 
 recomended to download ollama.cpp or just tune to your own llm
 
 In short, this repository is a small, local implementation of a Giftia-inspired AI companion built as a Python project.
+
+
+## P6: Life and Development foundation
+
+The first P6 slice adds `core/life.py`, a local JSON-backed store for:
+
+- private diary entries, kept separate from chat history and not automatically placed in LLM prompts
+- goals with active, paused, and completed statuses
+- structured reflections (observation, lesson, next step)
+- milestones
+- local time context and elapsed time since the previous session
+
+The terminal exposes these commands:
+
+- `/diary <note>` and `/diary show`
+- `/goal <title>`, `/goals`, and `/goal-done <goal-id>`
+- `/reflect <observation> | <lesson> | <next step>`
+- `/reflections`, `/milestones`, and `/time`
+
+Data is stored in `ai.exe/data/life.json`. Diary text is intentionally not included in ordinary conversation context. This is a storage and user-invoked workflow foundation, not autonomous self-reflection: automatic evaluation, memory consolidation/decay, and identity-change policy remain future work.
+
+### P6 unit tests
+
+From the `ai.exe` directory, run:
+
+```bash
+python -m unittest discover -s test
+```
+
+The P6 tests use temporary files and do not alter personal runtime data.
