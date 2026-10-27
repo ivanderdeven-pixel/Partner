@@ -23,7 +23,7 @@ class Response:
         for item in history[:5]:
             if isinstance(item, dict):
                 user = item.get("user")
-                assistant = item.get("assistant")
+                assistant = item.get("ai", item.get("assistant"))
                 if user or assistant:
                     entries.append(f"User: {user or '...'} | AI: {assistant or '...'}")
             elif isinstance(item, str):
