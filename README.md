@@ -20,17 +20,65 @@ The core concept behind this project is:
 
 This is intentionally a prototype and experimental project rather than a production-grade product.
 
-## Download / branch note
+## Branches and installation
 
-If you want the newer or higher-version build, download the `p6` branch:
+This repository has multiple experimental branches. Each branch is a different direction of the same project, so you can choose the version that matches the experience you want.
+
+### 1. Main branch
 
 ```bash
 git clone https://github.com/ivanderdeven-pixel/Partner.git
 cd Partner
-git checkout p6
+git checkout main
 ```
 
-If you do not need the newer branch, you can use the default branch instead.
+The `main` branch is the default baseline version. It is the simplest place to start if you want the original project flow and basic companion behavior.
+
+### 2. p6/autonomous-response
+
+```bash
+git clone https://github.com/ivanderdeven-pixel/Partner.git
+cd Partner
+git checkout p6/autonomous-response
+```
+
+This branch focuses on autonomous response behavior. It is designed to feel more independent and proactive, with the assistant making more active conversational decisions instead of simply reacting to user prompts. It is best if you want the companion to behave more like an active presence rather than a passive chatbot.
+
+### 3. p6/humanlike-initiative
+
+```bash
+git clone https://github.com/ivanderdeven-pixel/Partner.git
+cd Partner
+git checkout p6/humanlike-initiative
+```
+
+This branch is aimed at more natural, human-like initiative. It tries to improve the way the companion initiates conversation, responds with social timing, and behaves with more natural conversational flow. If you want the AI to feel more lifelike and less robotic, this is a strong option.
+
+### 4. p6/life-development-foundation
+
+```bash
+git clone https://github.com/ivanderdeven-pixel/Partner.git
+cd Partner
+git checkout p6/life-development-foundation
+```
+
+This branch is focused on long-term life and identity development. It explores how the companion can evolve over time through experiences, memory, and personality growth. It is best for users who want to explore emotional continuity, growth, and a deeper "life" model for the AI.
+
+### Quick install method for any branch
+
+```bash
+git clone https://github.com/ivanderdeven-pixel/Partner.git
+cd Partner
+git fetch --all --prune
+git checkout <branch-name>
+```
+
+Replace `<branch-name>` with one of the following:
+
+- `main`
+- `p6/autonomous-response`
+- `p6/humanlike-initiative`
+- `p6/life-development-foundation`
 
 ## Why it is called a Giftia project
 
@@ -185,7 +233,7 @@ If the project crashes or behaves unexpectedly:
 
 - delete the generated JSON data files and start again
 - confirm you are in the correct folder when running `python main.py`
-- use the `p6` branch if you want the newer version
+- use a specific branch if you want the behavior associated with that experimental version
 
 ## Main runtime (`ai.exe/main.py`)
 
