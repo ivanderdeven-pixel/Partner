@@ -19,9 +19,8 @@ class AutonomousResponseTests(unittest.TestCase):
         self.clock = FakeClock()
         self.agent = AutonomousResponse(
             enabled=True,
-            idle_seconds=30,
-            cooldown_seconds=60,
-            max_per_session=2,
+            idle_grace_seconds=10,
+            evaluation_interval_seconds=5,
             clock=self.clock,
         )
         self.state = {
@@ -31,39 +30,59 @@ class AutonomousResponseTests(unittest.TestCase):
             "curiosity": 50,
         }
 
-    def test_waits_until_idle_threshold(self):
-        self.clock.advance(29)
+    def test_waits_for_short_interaction_grace(self):
+        self.clock.advance(9)
         self.assertIsNone(self.agent.evaluate(self.state, []))
         self.clock.advance(1)
         self.assertIsNotNone(self.agent.evaluate(self.state, []))
 
-    def test_user_interaction_resets_idle_clock(self):
-        self.clock.advance(29)
+    def test_user_interaction_resets_idle_grace(self):
+        self.clock.advance(9)
         self.agent.user_interacted()
-        self.clock.advance(29)
+        self.clock.advance(9)
         self.assertIsNone(self.agent.evaluate(self.state, []))
 
-    def test_tired_state_suppresses_automatic_initiative(self):
-        self.clock.advance(60)
-        tired = dict(self.state, mood="tired", energy=10)
-        self.assertIsNone(self.agent.evaluate(tired, []))
+    def test_evaluation_interval_is_technical_not_speech_cooldown(self):
+        self.clock.advance(10)
+        self.assertIsNotNone(self.agent.evaluate(self.state, []))
+        self.agent.mark_evaluated()
+        self.agent.mark_spoken()
+        self.assertIsNone(self.agent.evaluate(self.state, []))
+        self.clock.advance(5)
+        # A new decision cycle may happen even though the agent recently spoke.
+        self.assertIsNotNone(self.agent.evaluate(self.state, []))
 
-    def test_disabled_suppresses_automatic_but_force_can_run(self):
+    def test_disabled_suppresses_automatic_but_force_requests_evaluation(self):
         self.agent.set_enabled(False)
-        self.clock.advance(60)
+        self.clock.advance(20)
         self.assertIsNone(self.agent.evaluate(self.state, []))
         self.assertIsNotNone(self.agent.evaluate(self.state, [], force=True))
 
-    def test_cooldown_and_session_limit(self):
+    def test_tired_state_is_passed_to_decision_layer_not_silently_blocked(self):
+        self.clock.advance(10)
+        tired = dict(self.state, mood="tired", energy=10)
+        trigger = self.agent.evaluate(tired, [])
+        self.assertIsNotNone(trigger)
+        self.assertEqual(trigger["state"]["mood"], "tired")
+        self.assertEqual(trigger["state"]["energy"], 10)
+
+    def test_decision_layer_can_set_context_dependent_recheck(self):
+        self.clock.advance(10)
+        self.agent.evaluate(self.state, [])
+        self.agent.mark_evaluated()
+        self.agent.schedule_next_evaluation(120)
+        self.clock.advance(60)
+        self.assertIsNone(self.agent.evaluate(self.state, []))
         self.clock.advance(60)
         self.assertIsNotNone(self.agent.evaluate(self.state, []))
-        self.agent.mark_sent()
-        self.assertIsNone(self.agent.evaluate(self.state, []))
-        self.clock.advance(61)
+
+    def test_no_session_message_cap(self):
+        self.clock.advance(10)
+        self.agent.evaluate(self.state, [])
+        for _ in range(10):
+            self.agent.mark_spoken()
+        self.clock.advance(5)
         self.assertIsNotNone(self.agent.evaluate(self.state, []))
-        self.agent.mark_sent()
-        self.clock.advance(61)
-        self.assertIsNone(self.agent.evaluate(self.state, []))
 
 
 if __name__ == "__main__":
