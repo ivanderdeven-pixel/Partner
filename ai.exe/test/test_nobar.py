@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 from core.nobar import ScreenNobar
 
@@ -15,7 +15,9 @@ class NobarTests(unittest.TestCase):
 
     def test_pause_resume_and_stop_transitions(self):
         nobar = ScreenNobar(model="test-vision")
-        with patch.object(nobar, "_watch_loop", side_effect=lambda: None):
+        fake_thread = Mock()
+        fake_thread.is_alive.return_value = False
+        with patch("core.nobar.threading.Thread", return_value=fake_thread):
             self.assertTrue(nobar.start())
             self.assertEqual(nobar.state, "watching")
             self.assertTrue(nobar.pause())
@@ -24,6 +26,7 @@ class NobarTests(unittest.TestCase):
             self.assertEqual(nobar.state, "watching")
             nobar.stop()
             self.assertEqual(nobar.state, "off")
+        fake_thread.start.assert_called_once()
 
     def test_cannot_pause_when_off_or_resume_when_not_paused(self):
         nobar = ScreenNobar(model="test-vision")
