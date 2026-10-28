@@ -1,101 +1,29 @@
 # Partner
 
-This project is a Giftia-inspired emotional AI companion prototype.
+Partner is a Python-based local AI companion prototype inspired by the emotional, memory-driven companion archetypes behind projects like Alma and Giftia.
 
-The idea is not just a normal chatbot. It is designed to feel like a personal companion: it can greet the user, listen by voice, remember details, track mood and activity, form a personality, and respond with an emotional, memory-aware presence.
+The project is designed to feel more like a personal companion than a traditional chatbot: it keeps identity context, remembers user details, updates mood and activity, and can respond with a more human-like conversational flow.
 
-The project is inspired by the broader Giftia concept: a synthetic companion with identity, memory, personality, and emotional presence. In this repository, that idea is implemented as a small Python project centered around the `ai.exe` runtime.
+## What this project does
 
-## Project vision
+- Maintains a persistent identity for the assistant
+- Stores user and AI memory in local JSON files
+- Tracks emotional state and activity over time
+- Builds conversation context and response prompts from memory and recent history
+- Supports text and voice input workflows
+- Runs locally with Ollama for LLM generation
+- Includes a life/development layer for goals, reflections, diary entries, and time context
+- Includes experimental autonomous initiative behavior for idle conversational decisions
 
-The core concept behind this project is:
+## Project goals
 
-- a companion AI with a name and identity
-- memory of the user and prior interactions
-- a personality model that changes over time
-- emotional state tracking such as happiness, curiosity, energy, and social mood
-- conversation flow that feels personal instead of mechanical
-- voice input and transcription support
-- local LLM-based response generation via Ollama
+This repository is primarily a research and prototype project focused on:
 
-This is intentionally a prototype and experimental project rather than a production-grade product.
-
-## Branches and installation
-
-This repository has multiple experimental branches. Each branch is a different direction of the same project, so you can choose the version that matches the experience you want.
-
-### 1. Main branch
-
-```bash
-git clone https://github.com/ivanderdeven-pixel/Partner.git
-cd Partner
-git checkout main
-```
-
-The `main` branch is the default baseline version. It is the simplest place to start if you want the original project flow and basic companion behavior.
-
-### 2. p6/autonomous-response
-
-```bash
-git clone https://github.com/ivanderdeven-pixel/Partner.git
-cd Partner
-git checkout p6/autonomous-response
-```
-
-This branch focuses on autonomous response behavior. It is designed to feel more independent and proactive, with the assistant making more active conversational decisions instead of simply reacting to user prompts. It is best if you want the companion to behave more like an active presence rather than a passive chatbot.
-
-### 3. p6/humanlike-initiative
-
-```bash
-git clone https://github.com/ivanderdeven-pixel/Partner.git
-cd Partner
-git checkout p6/humanlike-initiative
-```
-
-This branch is aimed at more natural, human-like initiative. It tries to improve the way the companion initiates conversation, responds with social timing, and behaves with more natural conversational flow. If you want the AI to feel more lifelike and less robotic, this is a strong option.
-
-### 4. p6/life-development-foundation
-
-```bash
-git clone https://github.com/ivanderdeven-pixel/Partner.git
-cd Partner
-git checkout p6/life-development-foundation
-```
-
-This branch is focused on long-term life and identity development. It explores how the companion can evolve over time through experiences, memory, and personality growth. It is best for users who want to explore emotional continuity, growth, and a deeper "life" model for the AI.
-
-### Quick install method for any branch
-
-```bash
-git clone https://github.com/ivanderdeven-pixel/Partner.git
-cd Partner
-git fetch --all --prune
-git checkout <branch-name>
-```
-
-Replace `<branch-name>` with one of the following:
-
-- `main`
-- `p6/autonomous-response`
-- `p6/humanlike-initiative`
-- `p6/life-development-foundation`
-
-## Why it is called a Giftia project
-
-The term "Giftia" here refers to an AI companion with a personality and emotional presence, not a literal executable program or a commercial product. The project is designed around the feeling of:
-
-- companionship
-- memory
-- empathy
-- emotional continuity
-- gradual personal connection with a user
-
-This is reflected across the codebase, especially in:
-
-- `core/ai_memory.py` for identity, personality, values, and experiences
-- `core/state.py` for mood and activity simulation
-- `core/brain.py` for interpretation and decision-making
-- `conversation/response.py` for empathetic, context-aware replies
+- emotional companionship
+- long-term memory and identity modeling
+- personalized interaction patterns
+- local-first AI behavior without cloud dependency
+- experimentation with self-directed conversation and life context tracking
 
 ## Repository structure
 
@@ -108,8 +36,10 @@ This is reflected across the codebase, especially in:
     ├── core/
     │   ├── ai_memory.py
     │   ├── audio_stream.py
+    │   ├── autonomous.py
     │   ├── brain.py
     │   ├── hearing.py
+    │   ├── life.py
     │   ├── memory.py
     │   ├── perception.py
     │   ├── personality.py
@@ -122,52 +52,48 @@ This is reflected across the codebase, especially in:
     │   └── __init__.py
     ├── data/
     │   ├── conversation_history.json
+    │   ├── life.json
     │   ├── memory.json
     │   └── __init__
     ├── llm/
     │   └── __init__.py
     ├── test/
     │   ├── test_audio_stream.py
+    │   ├── test_autonomous_response.py
     │   ├── test_voice_activity.py
     │   └── __init__
     └── __init__
 ```
 
-## Tutorial: how to use this project
+## Requirements
 
-### 1. Install prerequisites
-
-Make sure you have:
-
-- Python 3.10 or newer
+- Python 3.10+
 - Git
-- Ollama installed and available in your PATH
+- Ollama installed and running locally
 
-Install the Python dependencies:
+## Install dependencies
+
+Use pip to install the project requirements:
 
 ```bash
 pip install numpy sounddevice scipy noisereduce openai-whisper ollama
 ```
 
-If some packages are missing on your system, install them individually as needed for your OS.
+If your environment is missing additional packages, install them individually as needed.
 
-### 2. Start Ollama
-
-Run:
+## Start Ollama
 
 ```bash
 ollama serve
 ```
 
-Then pull the model used by the project:
+Then pull the local model used by the project:
 
 ```bash
 ollama pull qwen3:latest
 ```
 
-If you want to use a different local model, update the model name in the project code and match it to a model you have downloaded.
-
-### 3. Run the app
+## Run the app
 
 From the repository root:
 
@@ -176,310 +102,58 @@ cd ai.exe
 python main.py
 ```
 
-The application will initialize the companion, create its memory files, and start the conversation loop.
-
-### 4. First-time setup
-
 On first launch, the app may ask for:
 
 - the user's name
 - the AI companion's name
 
-This information is saved in the local data files so the project keeps its identity across runs.
+These values are stored in the local data files and reused on later runs.
 
-### 5. Chat with the AI
-
-You can interact in the terminal in normal text mode.
-
-Example flow:
+## Example interaction
 
 ```text
 Hello
-> Hi! Nice to meet you. What's your name?
+Partner: Hi! Nice to meet you. What's your name?
 ```
 
-The assistant is designed to feel more like a companion than a plain chatbot, so it stores context, personality traits, and emotional state over time.
+The assistant is built to behave more like a companion than a plain terminal chatbot, with state, memory, and emotional context shaping the tone and content of responses.
 
-### 6. Use voice input
+## Built-in commands
 
-This project supports microphone-based voice input. To use it, start the app and enter the voice command mode if available in the runtime, or follow the command pattern used by the project.
+The project includes several local runtime commands:
 
-Typical voice-mode flow:
+- `/diary <note>`
+- `/diary show`
+- `/goal <title>`
+- `/goals`
+- `/goal-done <goal-id>`
+- `/reflect <observation> | <lesson> | <next step>`
+- `/reflections`
+- `/milestones`
+- `/time`
+- `/initiative status | on | off | now`
+- `/voice`
 
-- enable microphone capture
-- speak naturally
-- wait for transcription
-- the assistant processes the spoken input and replies
+These commands are handled locally and are intended for experimentation and personal interaction rather than external service calls.
 
-### 7. Where the data is stored
+## Data storage
 
-The app stores persistent data under `ai.exe/data/`:
-
-- `memory.json` for user/AI settings and general memory state
-- `conversation_history.json` for conversation logs
-
-These files are created automatically as the app runs.
-
-### 8. Troubleshooting
-
-If the app does not start:
-
-- make sure Ollama is running
-- make sure `qwen3:latest` is installed
-- check that Python dependencies were installed successfully
-- verify your microphone permissions if using voice mode
-
-If the project crashes or behaves unexpectedly:
-
-- delete the generated JSON data files and start again
-- confirm you are in the correct folder when running `python main.py`
-- use a specific branch if you want the behavior associated with that experimental version
-
-## Main runtime (`ai.exe/main.py`)
-
-This file is the entry point of the project. It initializes the assistant, creates the memory systems, launches the background state updater, asks for names if they are missing, and then starts the main interaction loop.
-
-The flow is:
-
-1. create `Memory`
-2. create `AIMemory`
-3. create `State`
-4. create `ConversationHistory`
-5. create `Brain`
-6. create `Response`
-7. ask for the user's and AI's names if required
-8. accept chat input or voice input
-9. process the input with the brain
-10. build LLM context
-11. generate a response
-12. save history and memory
-
-It supports both text chat and microphone voice input.
-
-## Core subsystem overview
-
-### `ai.exe/core/state.py`
-This file tracks the internal emotional state of the AI. The state includes:
-
-- happiness
-- energy
-- curiosity
-- social level
-- current activity
-
-The system can change those values based on events like user messages or periods of idleness. This gives the AI a simple but effective emotional model.
-
-### `ai.exe/core/brain.py`
-This is the central decision layer. It handles:
-
-- intent detection
-- context analysis
-- memory analysis
-- AI experience detection
-- opinion and personality updates
-- response planning
-- LLM prompt context preparation
-
-In other words, `Brain` acts like the AI's cognitive core.
-
-### `ai.exe/core/memory.py`
-This is a simple persistent memory store for general app data. It saves values like:
-
-- user name
-- AI name
-- preferences
-
-It uses JSON files under the `data/` directory, making the project stateful across runs.
-
-### `ai.exe/core/ai_memory.py`
-This is the more advanced long-term memory model. It holds:
-
-- identity
-- personality traits
-- likes/dislikes
-- opinions
-- values
-- morality/principles
-- self-model
-- important events
-- experiences
-
-This is where the giftia-like identity is actually modeled: the assistant is not just a response generator; it is an entity that keeps a memory of itself and its experiences.
-
-### `ai.exe/core/perception.py`
-This module keeps track of environmental and contextual awareness, including:
-
-- current time and date
-- activity state
-- platform information
-- event detection
-- hearing and vision availability
-
-It gives the companion a more alive and situational understanding of its environment.
-
-### `ai.exe/core/hearing.py`
-This is the speech pipeline. It uses:
-
-- microphone capture
-- noise reduction
-- voice activity detection
-- normalization
-- Whisper transcription
-
-This allows the assistant to hear the user and convert spoken words into text before processing them.
-
-### `ai.exe/core/audio_stream.py`
-This file provides continuous microphone streaming with a bounded queue. It is built for real-time capture and supports resource-aware audio handling.
-
-### `ai.exe/conversation/history.py`
-This stores the recent conversation history in JSON format and keeps only the most recent messages.
-
-### `ai.exe/conversation/response.py`
-This is the final text generation layer. It sends contextual information to Ollama and asks the model to act as the assistant while keeping style, identity, and safety constraints in mind.
-
-The model used is:
-
-```python
-qwen3:latest
-```
-
-This means the assistant uses a local Ollama model to produce responses.
-
-## Data layer (`ai.exe/data`)
-
-The `data/` folder stores the project's persistent state:
+The app persists its local state under `ai.exe/data/`: 
 
 - `memory.json` for general memory data
 - `conversation_history.json` for chat logs
+- `life.json` for diary, goals, reflections, and time metadata
 
-These files are created and updated during runtime.
+## Notes
 
-## Voice/interaction model
+This is a prototype and experimental project, not a production-ready product. It is intended as a local, personal AI companion framework for experimentation and learning.
 
-The project supports two interaction styles:
+The repository is primarily Python-based and is centered around the `ai.exe` system, which contains the core companion logic, memory, state simulation, voice processing, and local LLM reasoning layers.
 
-1. normal text input
-2. spoken voice input via microphone
+## License
 
-The voice pipeline is designed to:
+This repository does not currently declare a license file in the root. If you plan to reuse or distribute the project, verify the intended licensing before publication or commercial use.
 
-- capture audio
-- clean the signal
-- detect whether speech is present
-- transcribe to text
-- feed the result back into the normal conversation system
+## Summary
 
-This allows the AI to function more like a companion than a terminal-only chat bot.
-
-## LLM and local runtime
-
-The project depends on local Python libraries plus Ollama.
-
-Typical runtime dependencies include:
-
-- `numpy`
-- `sounddevice`
-- `scipy`
-- `noisereduce`
-- `whisper`
-- `ollama`
-
-To run the project locally, you usually need:
-
-```bash
-ollama serve
-ollama pull qwen3:latest
-```
-
-Then run:
-
-```bash
-cd ai.exe
-python main.py
-```
-
-## Design intent
-
-This project is best understood as a Giftia-style companion AI prototype:
-
-- it is conversational
-- it is memory-driven
-- it has a personality model
-- it tracks emotional state
-- it listens and responds using voice
-- it keeps persistent data on disk
-- it aims to feel personal and alive
-
-It is not a full commercial assistant, but it captures a clear emotional-companion concept in code.
-
-## Conclusion
-
-The `ai.exe` folder is the heart of the project. It contains an experimental AI companion prototype with:
-
-- identity and memory
-- emotional state simulation
-- voice recognition
-- LLM-powered conversation
-- persistent data storage
-- a Giftia-inspired personal companion design
-
-Recommended: download `ollama.cpp` or tune the project to use your own local LLM.
-
-In short, this repository is a small, local implementation of a Giftia-inspired AI companion built as a Python project.
-
-
-## P6: Life and Development foundation
-
-The first P6 slice adds `core/life.py`, a local JSON-backed store for:
-
-- private diary entries, kept separate from chat history and not automatically placed in LLM prompts
-- goals with active, paused, and completed statuses
-- structured reflections (observation, lesson, next step)
-- milestones
-- local time context and elapsed time since the previous session
-
-The terminal exposes these commands:
-
-- `/diary <note>` and `/diary show`
-- `/goal <title>`, `/goals`, and `/goal-done <goal-id>`
-- `/reflect <observation> | <lesson> | <next step>`
-- `/reflections`, `/milestones`, and `/time`
-
-Data is stored in `ai.exe/data/life.json`. Diary text is intentionally not included in ordinary conversation context. This is a storage and user-invoked workflow foundation, not autonomous self-reflection: automatic evaluation, memory consolidation/decay, and identity-change policy remain future work.
-
-### P6 unit tests
-
-From the `ai.exe` directory, run:
-
-```bash
-python -m unittest discover -s test
-```
-
-The P6 tests use temporary files and do not alter personal runtime data.
-
-## Autonomous initiative and self-directed conversation (P6)
-
-The initiative loop separates a technical scheduler from the AI's decision about whether to speak.
-
-- A short idle grace period avoids evaluating while the user is actively typing.
-- A technical evaluation interval helps control local model/CPU usage; it is not a cooldown on speaking.
-- The decision layer can choose `speak`, `wait`, or `silent`.
-- Possible motivations include curiosity, playfulness, social interest, follow-up, sharing, or an active goal.
-- The decision considers current state, recent conversation, active goals, the available preference/memory context, and the AI's self-model.
-- When the decision is `wait` or `silent`, no message is generated.
-- After each decision, the model may suggest a context-dependent time to evaluate again.
-- There is no universal 15-minute speech cooldown or fixed maximum number of spontaneous messages per session.
-- Automatic output is local to the terminal and local conversation history. It does not send messages externally.
-- User preferences and the AI's evolving preferences may differ; the decision prompt considers both when data is available. Missing preferences should not be invented as facts.
-
-Commands:
-- `/initiative status` — show whether automatic decision cycles are enabled and basic counters
-- `/initiative on` — enable automatic decision cycles for this session
-- `/initiative off` — disable automatic decision cycles for this session
-- `/initiative now` — request an immediate decision cycle; this does not force the AI to speak
-
-The defaults are experimental engineering parameters, not claims about human behavior. The implementation still needs to be run and tested on the target PC with Ollama available. Terminal prompt/output overlap is still a known risk with the background input worker. Unit tests can be run from the `ai.exe` directory:
-
-```bash
-python -m unittest test.test_autonomous_response
-```
+Partner is a local, Giftia-inspired AI companion project built in Python. It focuses on identity, memory, emotional context, life tracking, and a more personal interaction style for a terminal-based companion experience.
