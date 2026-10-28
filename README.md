@@ -426,3 +426,60 @@ The `ai.exe` folder is the heart of the project. It contains an experimental AI 
 Recommended: download `ollama.cpp` or tune the project to use your own local LLM.
 
 In short, this repository is a small, local implementation of a Giftia-inspired AI companion built as a Python project.
+
+
+## P6: Life and Development foundation
+
+The first P6 slice adds `core/life.py`, a local JSON-backed store for:
+
+- private diary entries, kept separate from chat history and not automatically placed in LLM prompts
+- goals with active, paused, and completed statuses
+- structured reflections (observation, lesson, next step)
+- milestones
+- local time context and elapsed time since the previous session
+
+The terminal exposes these commands:
+
+- `/diary <note>` and `/diary show`
+- `/goal <title>`, `/goals`, and `/goal-done <goal-id>`
+- `/reflect <observation> | <lesson> | <next step>`
+- `/reflections`, `/milestones`, and `/time`
+
+Data is stored in `ai.exe/data/life.json`. Diary text is intentionally not included in ordinary conversation context. This is a storage and user-invoked workflow foundation, not autonomous self-reflection: automatic evaluation, memory consolidation/decay, and identity-change policy remain future work.
+
+### P6 unit tests
+
+From the `ai.exe` directory, run:
+
+```bash
+python -m unittest discover -s test
+```
+
+The P6 tests use temporary files and do not alter personal runtime data.
+
+## Autonomous initiative and self-directed conversation (P6)
+
+The initiative loop separates a technical scheduler from the AI's decision about whether to speak.
+
+- A short idle grace period avoids evaluating while the user is actively typing.
+- A technical evaluation interval helps control local model/CPU usage; it is not a cooldown on speaking.
+- The decision layer can choose `speak`, `wait`, or `silent`.
+- Possible motivations include curiosity, playfulness, social interest, follow-up, sharing, or an active goal.
+- The decision considers current state, recent conversation, active goals, the available preference/memory context, and the AI's self-model.
+- When the decision is `wait` or `silent`, no message is generated.
+- After each decision, the model may suggest a context-dependent time to evaluate again.
+- There is no universal 15-minute speech cooldown or fixed maximum number of spontaneous messages per session.
+- Automatic output is local to the terminal and local conversation history. It does not send messages externally.
+- User preferences and the AI's evolving preferences may differ; the decision prompt considers both when data is available. Missing preferences should not be invented as facts.
+
+Commands:
+- `/initiative status` — show whether automatic decision cycles are enabled and basic counters
+- `/initiative on` — enable automatic decision cycles for this session
+- `/initiative off` — disable automatic decision cycles for this session
+- `/initiative now` — request an immediate decision cycle; this does not force the AI to speak
+
+The defaults are experimental engineering parameters, not claims about human behavior. The implementation still needs to be run and tested on the target PC with Ollama available. Terminal prompt/output overlap is still a known risk with the background input worker. Unit tests can be run from the `ai.exe` directory:
+
+```bash
+python -m unittest test.test_autonomous_response
+```
