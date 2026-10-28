@@ -155,9 +155,14 @@ def main():
     # A dedicated input thread lets the main loop check scheduled initiatives
     # while the terminal is waiting for the next line.
     input_queue = queue.Queue()
+    input_ready = threading.Event()
+    input_ready.set()
 
     def input_worker():
         while True:
+            # Tahan prompt berikutnya sampai main loop selesai memproses pesan.
+            input_ready.wait()
+            input_ready.clear()
             try:
                 value = input(f"{user_name} (ketik /voice untuk bicara): ")
             except (EOFError, KeyboardInterrupt):
@@ -198,6 +203,7 @@ def main():
                     # A failed local model call should not kill the chat loop.
                     print(f"\n[Autonomous] Gagal membuat pesan: {error}")
                     autonomous.mark_sent()
+            input_ready.set()
             continue
 
         autonomous.user_interacted()
@@ -205,6 +211,7 @@ def main():
         if user_input.lower() == "exit":
             print(f"{ai_name}: Dimengerti, sampai jumpa lagi, {user_name}.")
             running = False
+            input_ready.set()
             continue
 
         if user_input.lower().startswith("/initiative"):
@@ -255,9 +262,11 @@ def main():
                         print(f"[Autonomous] Gagal membuat pesan: {error}")
             else:
                 print("Gunakan /initiative status, /initiative on, /initiative off, atau /initiative now.")
+            input_ready.set()
             continue
 
         if user_input.startswith("/") and handle_life_command(user_input, life, ai_name):
+            input_ready.set()
             continue
 
         if user_input.lower() == "/voice":
@@ -265,19 +274,23 @@ def main():
             voice_result = brain.listen(duration=5, input_device=1)
             if not voice_result.get("success"):
                 print(f"{ai_name}: Maaf, suara belum bisa diproses. {voice_result.get('error', '')}")
+                input_ready.set()
                 continue
             user_input = voice_result.get("text", "").strip()
             if not user_input:
                 print(f"{ai_name}: Aku belum menangkap ucapanmu.")
+                input_ready.set()
                 continue
             print(f"[Transkripsi] {user_input}")
             autonomous.user_interacted()
             if user_input.lower() == "exit":
                 print(f"{ai_name}: Dimengerti, sampai jumpa lagi, {user_name}.")
                 running = False
+                input_ready.set()
                 continue
 
         if not user_input:
+            input_ready.set()
             continue
 
         state.apply_event("user_message")
@@ -302,6 +315,7 @@ def main():
         ai_message = response.generate(llm_context)
         print(f"{ai_name}: {ai_message}")
         history.add(user_input, ai_message)
+        input_ready.set()
 
 
 if __name__ == "__main__":
