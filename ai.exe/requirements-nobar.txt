@@ -1,0 +1,3 @@
+# Optional dependency for the opt-in screen capture used by /nobar.
+# Install from the ai.exe directory with: py -m pip install -r requirements-nobar.txt
+mss>=9.0,<11

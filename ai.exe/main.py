@@ -10,6 +10,7 @@ from conversation.response import Response
 from conversation.history import ConversationHistory
 from core.memory import Memory
 from core.ai_memory import AIMemory
+from core.nobar import ScreenNobar
 
 
 def state_updater(state):
@@ -128,6 +129,7 @@ def main():
     brain = Brain(state, history, memory, ai_memory)
     response = Response()
     autonomous = AutonomousResponse()
+    nobar = ScreenNobar(on_reaction=lambda message: print("\n" + ai_name + ": " + message))
 
     updater = threading.Thread(target=state_updater, args=(state,), daemon=True)
     updater.start()
@@ -150,6 +152,7 @@ def main():
     print("    /goal-done <ID>, /reflect <pengamatan> | <pelajaran> | <langkah>,")
     print("    /reflections, /milestones, /time")
     print("Autonomous response: /initiative status | on | off | now")
+    print("Mode Nobar: /nobar on | pause | resume | off | status")
     print(f"[Autonomous] Aktif; inisiatif setelah {autonomous.idle_seconds} detik idle, cooldown {autonomous.cooldown_seconds} detik.")
 
     # A dedicated input thread lets the main loop check scheduled initiatives
@@ -209,8 +212,37 @@ def main():
         autonomous.user_interacted()
 
         if user_input.lower() == "exit":
+            nobar.stop()
             print(f"{ai_name}: Dimengerti, sampai jumpa lagi, {user_name}.")
             running = False
+            input_ready.set()
+            continue
+
+        if user_input.lower().startswith("/nobar"):
+            _, _, argument = user_input.partition(" ")
+            option = argument.strip().lower() or "status"
+            if option == "on":
+                if nobar.start():
+                    print("[Nobar] Aktif. Model vision: {} ; interval {} detik.".format(nobar.model, nobar.interval))
+                    print("[Nobar] Audio anime belum diproses; gambar tidak disimpan ke disk.")
+                else:
+                    print("[Nobar] Sudah dalam status {}.".format(nobar.state))
+            elif option == "pause":
+                print("[Nobar] Pengamatan dijeda." if nobar.pause() else "[Nobar] Tidak sedang menonton.")
+            elif option == "resume":
+                print("[Nobar] Pengamatan dilanjutkan." if nobar.resume() else "[Nobar] Tidak sedang dijeda.")
+            elif option == "off":
+                nobar.stop()
+                print("[Nobar] Sesi pengamatan dihentikan.")
+            elif option == "status":
+                status = nobar.status()
+                print("[Nobar] Status: {}; model: {}; interval: {}s.".format(status.get("state"), status.get("model"), status.get("interval_seconds")))
+                if status.get("last_observation"):
+                    print("[Nobar] Pengamatan terakhir: {}".format(status.get("last_observation")))
+                if status.get("last_error"):
+                    print("[Nobar] Error terakhir: {}".format(status.get("last_error")))
+            else:
+                print("Gunakan /nobar on, /nobar pause, /nobar resume, /nobar off, atau /nobar status.")
             input_ready.set()
             continue
 
