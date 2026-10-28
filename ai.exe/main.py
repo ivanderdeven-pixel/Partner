@@ -316,6 +316,7 @@ def main():
             print(f"[Transkripsi] {user_input}")
             autonomous.user_interacted()
             if user_input.lower() == "exit":
+                nobar.stop()
                 print(f"{ai_name}: Dimengerti, sampai jumpa lagi, {user_name}.")
                 running = False
                 input_ready.set()
