@@ -426,3 +426,57 @@ The `ai.exe` folder is the heart of the project. It contains an experimental AI 
 Recommended: download `ollama.cpp` or tune the project to use your own local LLM.
 
 In short, this repository is a small, local implementation of a Giftia-inspired AI companion built as a Python project.
+
+
+## P6: Life and Development foundation
+
+The first P6 slice adds `core/life.py`, a local JSON-backed store for:
+
+- private diary entries, kept separate from chat history and not automatically placed in LLM prompts
+- goals with active, paused, and completed statuses
+- structured reflections (observation, lesson, next step)
+- milestones
+- local time context and elapsed time since the previous session
+
+The terminal exposes these commands:
+
+- `/diary <note>` and `/diary show`
+- `/goal <title>`, `/goals`, and `/goal-done <goal-id>`
+- `/reflect <observation> | <lesson> | <next step>`
+- `/reflections`, `/milestones`, and `/time`
+
+Data is stored in `ai.exe/data/life.json`. Diary text is intentionally not included in ordinary conversation context. This is a storage and user-invoked workflow foundation, not autonomous self-reflection: automatic evaluation, memory consolidation/decay, and identity-change policy remain future work.
+
+### P6 unit tests
+
+From the `ai.exe` directory, run:
+
+```bash
+python -m unittest discover -s test
+```
+
+The P6 tests use temporary files and do not alter personal runtime data.
+
+## Autonomous response (P6)
+
+The `ai.exe/core/autonomous.py` scheduler enables bounded, self-initiated terminal messages:
+- After 3 minutes without a new input, it may initiate a short conversation.
+- It considers current state, recent chat, and active goals; private diary entries are not passed to the generator.
+- It pauses automatic initiatives when the state is tired/energy is low.
+- Automatic messages have a 15-minute cooldown and a maximum of 3 per session.
+- It only writes to the local terminal and local conversation history; it does not send messages externally.
+
+Commands during a session:
+- `/initiative status` — show current setting and counters
+- `/initiative on` — enable scheduled initiatives for this session
+- `/initiative off` — disable scheduled initiatives for this session
+- `/initiative now` — request one initiative immediately
+
+The scheduler and tests are experimental and still need to be run on the target PC with Ollama available. The console input worker may cause terminal prompt/output overlap on some terminals; treat this as a development branch, not a verified release.
+
+Run the scheduler unit tests from the `ai.exe` directory:
+
+```bash
+python -m unittest test.test_autonomous_response
+```
+

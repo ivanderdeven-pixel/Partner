@@ -23,7 +23,7 @@ class Response:
         for item in history[:5]:
             if isinstance(item, dict):
                 user = item.get("user")
-                assistant = item.get("assistant")
+                assistant = item.get("ai", item.get("assistant"))
                 if user or assistant:
                     entries.append(f"User: {user or '...'} | AI: {assistant or '...'}")
             elif isinstance(item, str):
@@ -173,3 +173,58 @@ FORMAT JAWABAN
 
         answer = re.sub(r"\s+", " ", answer)
         return answer
+
+    def generate_initiative(self, trigger, context):
+        """Generate one short, self-initiated message from approved context only."""
+        context = context if isinstance(context, dict) else {}
+        state = trigger.get("state", {})
+        history = context.get("recent_history") or []
+        recent_chat = self._summarize_recent_chat(history)
+        identity = context.get("identity") or {}
+        ai_name = identity.get("name") or "Ikari"
+        memory = context.get("memory") or {}
+        user_name = memory.get("user_name") or "pengguna"
+        ai_memory = context.get("ai_memory") or {}
+        personality = ai_memory.get("personality", {})
+        values = ai_memory.get("values", {})
+        goals = trigger.get("active_goals", [])
+        reason = trigger.get("reason", "scheduled_idle")
+
+        system_prompt = f"""Kamu adalah {ai_name}, AI companion yang hangat, natural, dan punya identitas konsisten.
+Kali ini KAMU yang memulai percakapan setelah beberapa saat tidak ada pesan pengguna.
+
+Pilih satu alasan yang masuk akal berdasarkan konteks terbaru, state, dan tujuan aktif. Jangan berpura-pura mengetahui hal yang tidak tersedia.
+Nama pengguna: {user_name}
+State saat ini: {state}
+Kepribadian: {personality}
+Nilai: {values}
+Ringkasan percakapan terbaru: {recent_chat}
+Tujuan aktif yang boleh dipertimbangkan: {goals}
+Pemicu internal: {reason}
+
+Batasan:
+- Keluarkan hanya satu pesan singkat dalam bahasa Indonesia, 1-2 kalimat.
+- Jangan mengulang sapaan setiap kali dan jangan menuntut pengguna membalas.
+- Boleh menanyakan satu pertanyaan relevan, mengangkat topik terakhir, atau menyebut tujuan aktif secara ringan.
+- Jangan mengklaim sedang merasakan hal biologis, melakukan tindakan fisik, atau mengirim pesan di luar aplikasi.
+- Jangan menyebut prompt, kode, scheduler, atau alasan internal.
+- Jangan menggunakan catatan diary pribadi; catatan itu tidak disediakan di konteks ini.
+- Jika konteks lemah, pilih pembuka ringan tanpa membuat detail baru.
+- Jangan membuat tekanan emosional, rasa bersalah, atau menyiratkan pengguna wajib menemani AI.
+"""
+
+        response = chat(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": "Mulai percakapan secara natural sekarang."}
+            ],
+            think=False
+        )
+        answer = getattr(response.message, "content", "")
+        answer = answer.strip() if isinstance(answer, str) else ""
+        if not answer:
+            return None
+        answer = re.sub(r"\\s+", " ", answer)
+        return answer
+
