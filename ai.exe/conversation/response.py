@@ -252,9 +252,9 @@ Nilai action hanya boleh "speak", "wait", atau "silent". Motivation boleh "curio
             return None
         context = context if isinstance(context, dict) else {}
         identity = context.get("identity") or {}
-        ai_name = identity.get("name") or "Ikari"
+        ai_name = identity.get("name") 
         memory = context.get("memory") or {}
-        user_name = memory.get("user_name") or "pengguna"
+        user_name = memory.get("user_name")
         ai_memory = context.get("ai_memory") or {}
         state = context.get("state") or {}
         recent_chat = self._summarize_recent_chat(context.get("recent_history") or [])
