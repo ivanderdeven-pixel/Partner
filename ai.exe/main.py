@@ -209,146 +209,141 @@ def main():
             input_ready.set()
             continue
 
-        autonomous.user_interacted()
-
-        if user_input.lower() == "exit":
-            nobar.stop()
-            print(f"{ai_name}: Dimengerti, sampai jumpa lagi, {user_name}.")
-            running = False
-            input_ready.set()
-            continue
-
-        if user_input.lower().startswith("/nobar"):
-            _, _, argument = user_input.partition(" ")
-            option = argument.strip().lower() or "status"
-            if option == "on":
-                if nobar.start():
-                    print("[Nobar] Aktif. Model vision: {} ; interval {} detik.".format(nobar.model, nobar.interval))
-                    print("[Nobar] Audio anime belum diproses; gambar tidak disimpan ke disk.")
-                else:
-                    print("[Nobar] Sudah dalam status {}.".format(nobar.state))
-            elif option == "pause":
-                print("[Nobar] Pengamatan dijeda." if nobar.pause() else "[Nobar] Tidak sedang menonton.")
-            elif option == "resume":
-                print("[Nobar] Pengamatan dilanjutkan." if nobar.resume() else "[Nobar] Tidak sedang dijeda.")
-            elif option == "off":
-                nobar.stop()
-                print("[Nobar] Sesi pengamatan dihentikan.")
-            elif option == "status":
-                status = nobar.status()
-                print("[Nobar] Status: {}; model: {}; interval: {}s.".format(status.get("state"), status.get("model"), status.get("interval_seconds")))
-                if status.get("last_observation"):
-                    print("[Nobar] Pengamatan terakhir: {}".format(status.get("last_observation")))
-                if status.get("last_error"):
-                    print("[Nobar] Error terakhir: {}".format(status.get("last_error")))
-            else:
-                print("Gunakan /nobar on, /nobar pause, /nobar resume, /nobar off, atau /nobar status.")
-            input_ready.set()
-            continue
-
-        if user_input.lower().startswith("/initiative"):
-            _, _, argument = user_input.partition(" ")
-            option = argument.strip().lower()
-            if option == "on":
-                autonomous.set_enabled(True)
-                print(f"[Autonomous] Aktif. Ambang idle {autonomous.idle_seconds} detik.")
-            elif option == "off":
-                autonomous.set_enabled(False)
-                print("[Autonomous] Dimatikan untuk sesi ini.")
-            elif option == "status" or not option:
-                status = "aktif" if autonomous.enabled else "mati"
-                print(
-                    f"[Autonomous] {status}; terkirim {autonomous.sent_this_session}/"
-                    f"{autonomous.max_per_session}; idle {autonomous.idle_seconds}s; "
-                    f"cooldown {autonomous.cooldown_seconds}s."
-                )
-            elif option == "now":
-                trigger = autonomous.evaluate(
-                    state=brain.analyze_state(),
-                    recent_history=history.get_recent(5),
-                    active_goals=life.get_goals(status="active"),
-                    force=True,
-                )
-                if not trigger:
-                    print("[Autonomous] Tidak ada pesan yang dibuat.")
-                else:
-                    try:
-                        context = {
-                            "identity": brain.analyze_identity(),
-                            "state": brain.analyze_state(),
-                            "memory": brain.analyze_memory(),
-                            "ai_memory": brain.analyze_ai_memory(
-                                history.get_recent(1)[-1].get("user", "")
-                                if history.get_recent(1) else ""
-                            ),
-                            "recent_history": history.get_recent(5),
-                        }
-                        message = response.generate_initiative(trigger, context)
-                        if message:
-                            print(f"{ai_name} (inisiatif): {message}")
-                            history.add("[inisiatif]", message)
-                            autonomous.mark_sent()
-                        else:
-                            print("[Autonomous] Model tidak menghasilkan pesan.")
-                    except Exception as error:
-                        print(f"[Autonomous] Gagal membuat pesan: {error}")
-            else:
-                print("Gunakan /initiative status, /initiative on, /initiative off, atau /initiative now.")
-            input_ready.set()
-            continue
-
-        if user_input.startswith("/") and handle_life_command(user_input, life, ai_name):
-            input_ready.set()
-            continue
-
-        if user_input.lower() == "/voice":
-            print("Mendengarkan selama 5 detik...")
-            voice_result = brain.listen(duration=5, input_device=1)
-            if not voice_result.get("success"):
-                print(f"{ai_name}: Maaf, suara belum bisa diproses. {voice_result.get('error', '')}")
-                input_ready.set()
-                continue
-            user_input = voice_result.get("text", "").strip()
-            if not user_input:
-                print(f"{ai_name}: Aku belum menangkap ucapanmu.")
-                input_ready.set()
-                continue
-            print(f"[Transkripsi] {user_input}")
+        try:
             autonomous.user_interacted()
+    
             if user_input.lower() == "exit":
                 nobar.stop()
                 print(f"{ai_name}: Dimengerti, sampai jumpa lagi, {user_name}.")
                 running = False
-                input_ready.set()
                 continue
-
-        if not user_input:
+    
+            if user_input.lower().startswith("/nobar"):
+                _, _, argument = user_input.partition(" ")
+                option = argument.strip().lower() or "status"
+                if option == "on":
+                    if nobar.start():
+                        print("[Nobar] Aktif. Model vision: {} ; interval {} detik.".format(nobar.model, nobar.interval))
+                        print("[Nobar] Audio anime belum diproses; gambar tidak disimpan ke disk.")
+                    else:
+                        print("[Nobar] Sudah dalam status {}.".format(nobar.state))
+                elif option == "pause":
+                    print("[Nobar] Pengamatan dijeda." if nobar.pause() else "[Nobar] Tidak sedang menonton.")
+                elif option == "resume":
+                    print("[Nobar] Pengamatan dilanjutkan." if nobar.resume() else "[Nobar] Tidak sedang dijeda.")
+                elif option == "off":
+                    nobar.stop()
+                    print("[Nobar] Sesi pengamatan dihentikan.")
+                elif option == "status":
+                    status = nobar.status()
+                    print("[Nobar] Status: {}; model: {}; interval: {}s.".format(status.get("state"), status.get("model"), status.get("interval_seconds")))
+                    if status.get("last_observation"):
+                        print("[Nobar] Pengamatan terakhir: {}".format(status.get("last_observation")))
+                    if status.get("last_error"):
+                        print("[Nobar] Error terakhir: {}".format(status.get("last_error")))
+                else:
+                    print("Gunakan /nobar on, /nobar pause, /nobar resume, /nobar off, atau /nobar status.")
+                continue
+    
+            if user_input.lower().startswith("/initiative"):
+                _, _, argument = user_input.partition(" ")
+                option = argument.strip().lower()
+                if option == "on":
+                    autonomous.set_enabled(True)
+                    print(f"[Autonomous] Aktif. Ambang idle {autonomous.idle_seconds} detik.")
+                elif option == "off":
+                    autonomous.set_enabled(False)
+                    print("[Autonomous] Dimatikan untuk sesi ini.")
+                elif option == "status" or not option:
+                    status = "aktif" if autonomous.enabled else "mati"
+                    print(
+                        f"[Autonomous] {status}; terkirim {autonomous.sent_this_session}/"
+                        f"{autonomous.max_per_session}; idle {autonomous.idle_seconds}s; "
+                        f"cooldown {autonomous.cooldown_seconds}s."
+                    )
+                elif option == "now":
+                    trigger = autonomous.evaluate(
+                        state=brain.analyze_state(),
+                        recent_history=history.get_recent(5),
+                        active_goals=life.get_goals(status="active"),
+                        force=True,
+                    )
+                    if not trigger:
+                        print("[Autonomous] Tidak ada pesan yang dibuat.")
+                    else:
+                        try:
+                            context = {
+                                "identity": brain.analyze_identity(),
+                                "state": brain.analyze_state(),
+                                "memory": brain.analyze_memory(),
+                                "ai_memory": brain.analyze_ai_memory(
+                                    history.get_recent(1)[-1].get("user", "")
+                                    if history.get_recent(1) else ""
+                                ),
+                                "recent_history": history.get_recent(5),
+                            }
+                            message = response.generate_initiative(trigger, context)
+                            if message:
+                                print(f"{ai_name} (inisiatif): {message}")
+                                history.add("[inisiatif]", message)
+                                autonomous.mark_sent()
+                            else:
+                                print("[Autonomous] Model tidak menghasilkan pesan.")
+                        except Exception as error:
+                            print(f"[Autonomous] Gagal membuat pesan: {error}")
+                else:
+                    print("Gunakan /initiative status, /initiative on, /initiative off, atau /initiative now.")
+                continue
+    
+            if user_input.startswith("/") and handle_life_command(user_input, life, ai_name):
+                continue
+    
+            if user_input.lower() == "/voice":
+                print("Mendengarkan selama 5 detik...")
+                voice_result = brain.listen(duration=5, input_device=1)
+                if not voice_result.get("success"):
+                    print(f"{ai_name}: Maaf, suara belum bisa diproses. {voice_result.get('error', '')}")
+                    continue
+                user_input = voice_result.get("text", "").strip()
+                if not user_input:
+                    print(f"{ai_name}: Aku belum menangkap ucapanmu.")
+                    continue
+                print(f"[Transkripsi] {user_input}")
+                autonomous.user_interacted()
+                if user_input.lower() == "exit":
+                    nobar.stop()
+                    print(f"{ai_name}: Dimengerti, sampai jumpa lagi, {user_name}.")
+                    running = False
+                    continue
+    
+            if not user_input:
+                continue
+    
+            state.apply_event("user_message")
+            thought = brain.think(user_input)
+            llm_context = brain.build_llm_context(thought, user_input)
+    
+            if thought["new_memory"] is not None:
+                new_memory = thought["new_memory"]
+                memory.remember(new_memory["type"], new_memory["value"])
+    
+            if thought["ai_experience"] is not None:
+                ai_experience = thought["ai_experience"]
+                ai_experience["context"] = {
+                    "mood": thought["state"]["mood"],
+                    "activity": thought["state"]["activity"],
+                }
+                ai_memory.add_experience(ai_experience)
+    
+            if thought["important_event"] is not None:
+                ai_memory.add_important_event(thought["important_event"])
+    
+            ai_message = response.generate(llm_context)
+            print(f"{ai_name}: {ai_message}")
+            history.add(user_input, ai_message)
+        finally:
+            # Match PR #9: the next prompt appears only after this input is handled.
             input_ready.set()
-            continue
-
-        state.apply_event("user_message")
-        thought = brain.think(user_input)
-        llm_context = brain.build_llm_context(thought, user_input)
-
-        if thought["new_memory"] is not None:
-            new_memory = thought["new_memory"]
-            memory.remember(new_memory["type"], new_memory["value"])
-
-        if thought["ai_experience"] is not None:
-            ai_experience = thought["ai_experience"]
-            ai_experience["context"] = {
-                "mood": thought["state"]["mood"],
-                "activity": thought["state"]["activity"],
-            }
-            ai_memory.add_experience(ai_experience)
-
-        if thought["important_event"] is not None:
-            ai_memory.add_important_event(thought["important_event"])
-
-        ai_message = response.generate(llm_context)
-        print(f"{ai_name}: {ai_message}")
-        history.add(user_input, ai_message)
-        input_ready.set()
 
 
 if __name__ == "__main__":
