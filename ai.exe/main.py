@@ -157,8 +157,16 @@ def main():
     # while waiting for terminal input. The scheduler itself never forces speech.
     input_queue = queue.Queue()
 
+    # The input worker accepts only one line at a time. It waits for the
+    # main loop to acknowledge that the previous message was fully handled
+    # before displaying the next prompt.
+    input_ready = threading.Event()
+    input_ready.set()
+
     def input_worker():
         while True:
+            input_ready.wait()
+            input_ready.clear()
             try:
                 value = input(f"{user_name} (ketik /voice untuk bicara): ")
             except (EOFError, KeyboardInterrupt):
@@ -215,91 +223,97 @@ def main():
                 autonomous.schedule_next_evaluation(60)
             continue
 
-        autonomous.user_interacted()
-
-        if user_input.lower() == "exit":
-            print(f"{ai_name}: Dimengerti, sampai jumpa lagi, {user_name}.")
-            running = False
-            continue
-
-        if user_input.lower().startswith("/initiative"):
-            _, _, argument = user_input.partition(" ")
-            option = argument.strip().lower()
-            if option == "on":
-                autonomous.set_enabled(True)
-                print("[Autonomous] Inisiatif aktif; keputusan tetap dapat berupa diam.")
-            elif option == "off":
-                autonomous.set_enabled(False)
-                print("[Autonomous] Inisiatif otomatis dimatikan untuk sesi ini.")
-            elif option == "status" or not option:
-                status = "aktif" if autonomous.enabled else "mati"
-                last = "belum ada" if autonomous.last_initiative is None else "pernah"
-                print(
-                    f"[Autonomous] {status}; evaluasi {autonomous.evaluations_this_session}; "
-                    f"pesan spontan {autonomous.initiatives_this_session}; "
-                    f"terakhir berbicara: {last}; jeda teknis {autonomous.idle_grace_seconds}s."
-                )
-            elif option == "now":
-                try:
-                    decision = run_initiative_cycle(force=True)
-                    if not decision:
-                        print("[Autonomous] Siklus evaluasi belum tersedia.")
-                    else:
-                        print(
-                            f"[Autonomous] Keputusan: {decision.get('action')}; "
-                            f"alasan: {decision.get('reason', 'tidak tersedia')}"
-                        )
-                except Exception as error:
-                    print(f"[Autonomous] Evaluasi belum berhasil: {error}")
-            else:
-                print("Gunakan /initiative status, /initiative on, /initiative off, atau /initiative now.")
-            continue
-
-        if user_input.startswith("/") and handle_life_command(user_input, life, ai_name):
-            continue
-
-        if user_input.lower() == "/voice":
-            print("Mendengarkan selama 5 detik...")
-            voice_result = brain.listen(duration=5, input_device=1)
-            if not voice_result.get("success"):
-                print(f"{ai_name}: Maaf, suara belum bisa diproses. {voice_result.get('error', '')}")
-                continue
-            user_input = voice_result.get("text", "").strip()
-            if not user_input:
-                print(f"{ai_name}: Aku belum menangkap ucapanmu.")
-                continue
-            print(f"[Transkripsi] {user_input}")
+        try:
             autonomous.user_interacted()
+
             if user_input.lower() == "exit":
                 print(f"{ai_name}: Dimengerti, sampai jumpa lagi, {user_name}.")
                 running = False
                 continue
 
-        if not user_input:
-            continue
+            if user_input.lower().startswith("/initiative"):
+                _, _, argument = user_input.partition(" ")
+                option = argument.strip().lower()
+                if option == "on":
+                    autonomous.set_enabled(True)
+                    print("[Autonomous] Inisiatif aktif; keputusan tetap dapat berupa diam.")
+                elif option == "off":
+                    autonomous.set_enabled(False)
+                    print("[Autonomous] Inisiatif otomatis dimatikan untuk sesi ini.")
+                elif option == "status" or not option:
+                    status = "aktif" if autonomous.enabled else "mati"
+                    last = "belum ada" if autonomous.last_initiative is None else "pernah"
+                    print(
+                        f"[Autonomous] {status}; evaluasi {autonomous.evaluations_this_session}; "
+                        f"pesan spontan {autonomous.initiatives_this_session}; "
+                        f"terakhir berbicara: {last}; jeda teknis {autonomous.idle_grace_seconds}s."
+                    )
+                elif option == "now":
+                    try:
+                        decision = run_initiative_cycle(force=True)
+                        if not decision:
+                            print("[Autonomous] Siklus evaluasi belum tersedia.")
+                        else:
+                            print(
+                                f"[Autonomous] Keputusan: {decision.get('action')}; "
+                                f"alasan: {decision.get('reason', 'tidak tersedia')}"
+                            )
+                    except Exception as error:
+                        print(f"[Autonomous] Evaluasi belum berhasil: {error}")
+                else:
+                    print("Gunakan /initiative status, /initiative on, /initiative off, atau /initiative now.")
+                continue
 
-        state.apply_event("user_message")
-        thought = brain.think(user_input)
-        llm_context = brain.build_llm_context(thought, user_input)
+            if user_input.startswith("/") and handle_life_command(user_input, life, ai_name):
+                continue
 
-        if thought["new_memory"] is not None:
-            new_memory = thought["new_memory"]
-            memory.remember(new_memory["type"], new_memory["value"])
+            if user_input.lower() == "/voice":
+                print("Mendengarkan selama 5 detik...")
+                voice_result = brain.listen(duration=5, input_device=1)
+                if not voice_result.get("success"):
+                    print(f"{ai_name}: Maaf, suara belum bisa diproses. {voice_result.get('error', '')}")
+                    continue
+                user_input = voice_result.get("text", "").strip()
+                if not user_input:
+                    print(f"{ai_name}: Aku belum menangkap ucapanmu.")
+                    continue
+                print(f"[Transkripsi] {user_input}")
+                autonomous.user_interacted()
+                if user_input.lower() == "exit":
+                    print(f"{ai_name}: Dimengerti, sampai jumpa lagi, {user_name}.")
+                    running = False
+                    continue
 
-        if thought["ai_experience"] is not None:
-            ai_experience = thought["ai_experience"]
-            ai_experience["context"] = {
-                "mood": thought["state"]["mood"],
-                "activity": thought["state"]["activity"],
-            }
-            ai_memory.add_experience(ai_experience)
+            if not user_input:
+                continue
 
-        if thought["important_event"] is not None:
-            ai_memory.add_important_event(thought["important_event"])
+            state.apply_event("user_message")
+            thought = brain.think(user_input)
+            llm_context = brain.build_llm_context(thought, user_input)
 
-        ai_message = response.generate(llm_context)
-        print(f"{ai_name}: {ai_message}")
-        history.add(user_input, ai_message)
+            if thought["new_memory"] is not None:
+                new_memory = thought["new_memory"]
+                memory.remember(new_memory["type"], new_memory["value"])
+
+            if thought["ai_experience"] is not None:
+                ai_experience = thought["ai_experience"]
+                ai_experience["context"] = {
+                    "mood": thought["state"]["mood"],
+                    "activity": thought["state"]["activity"],
+                }
+                ai_memory.add_experience(ai_experience)
+
+            if thought["important_event"] is not None:
+                ai_memory.add_important_event(thought["important_event"])
+
+            ai_message = response.generate(llm_context)
+            print(f"{ai_name}: {ai_message}")
+            history.add(user_input, ai_message)
+        finally:
+            # Do not show another input prompt until this turn (including
+            # any normal response) has completed.
+            input_ready.set()
+
 
 
 if __name__ == "__main__":
