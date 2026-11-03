@@ -318,3 +318,29 @@ Run the scheduler unit tests from the `ai.exe` directory:
 python -m unittest test.test_autonomous_response
 ```
 
+## Experimental anime co-watching (Nobar)
+
+The opt-in `/nobar` feature captures the primary monitor at a low sampling rate and sends frames to a separate Ollama vision model. It does not replace the main `qwen3:latest` conversation model, does not save screenshots to disk, and does not process anime audio yet.
+
+From the `ai.exe` directory:
+
+```powershell
+py -m pip install -r requirements-nobar.txt
+ollama pull qwen2.5vl:3b
+```
+
+Then start Giftia and use:
+
+- `/nobar on` — begin screen observation (capture is off by default)
+- `/nobar pause` — pause capture between observations
+- `/nobar resume` — resume observation
+- `/nobar status` — show status, last observation, or last error
+- `/nobar off` — stop the session
+
+Set `GIFTIA_VISION_MODEL` to use a different installed Ollama vision model. The default is `qwen2.5vl:3b`. The installed Ollama version must support the selected vision model; upgrade Ollama if the model is rejected. First launch may fail until the model has been pulled. This feature is experimental and needs testing on the target PC. It currently observes images only: audio understanding, subtitle/audio synchronization, and episode-level story memory are not implemented yet. Keep screen capture opt-in and stop it with `/nobar off` when finished.
+
+Run the Nobar lifecycle tests from the `ai.exe` directory:
+
+```powershell
+py -m unittest test.test_nobar
+```
